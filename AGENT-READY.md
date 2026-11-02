@@ -101,3 +101,22 @@ npx lighthouse@13.6.0 http://localhost:8080/ --only-categories=agentic-browsing 
   --chrome-flags="--headless=new --enable-features=WebMCPTesting" --output=json --output-path=lh.json
 python3 tools/agentic_report.py lh.json
 ```
+
+
+## Measured on the v1.0.0 build (2 November 2026)
+
+Lighthouse 13.6.0, Agentic browsing category only, Chromium 156.0.8078.4 headless with `--enable-features=WebMCPTesting`, site served locally by `tools/serve.py` (the SWA headers and rewrites):
+
+| Page type | URL | Score |
+| --- | --- | --- |
+| home | `/` | 1.00 |
+| chapter | `/08-server-side-tools-with-mcp.html` | 1.00 |
+| appendix | `/appendix-b-reference.html` | 1.00 |
+| about | `/about.html` | 1.00 |
+| part | `/part-3.html` | 1.00 |
+| search | `/search.html?q=robots` | 1.00 |
+| history | `/releases.html` | 1.00 |
+
+Every audit passed on every page (accessibility tree, WebMCP form coverage, registered tools, schema validity, CLS, llms.txt, ARD).
+
+The isitagentready checks, run locally with the book's own checker (`chapters/02-your-first-agent-ready-page/agent-ready-check.mjs` in the demos repo), because isitagentready.com scans only public URLs: Level 2 "Bot-Aware". Passing: robotsTxt, sitemap, linkHeaders, robotsTxtAiRules, contentSignals, agentSkills, webMcp, ard. Not passing: markdownNegotiation (Static Web Apps cannot vary a response by the `Accept` header; the Markdown is served at `<page>.md` instead), which is what Level 3 needs. Not applicable to a static book site: API catalog, OAuth metadata, MCP server card, auth.md. Re-run the real scan at https://isitagentready.com after the first deploy.
