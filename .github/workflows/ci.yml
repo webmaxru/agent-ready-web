@@ -1,0 +1,102 @@
+# Checks every change to the manuscript, the theme or the build tools: the manuscript lint must
+# pass, and the web edition, the EPUB and both PDFs must build without warnings (missing images,
+# broken cross-references, files without exactly one H1, empty book.json fields). The EPUB must
+# pass EPUBCheck, the site must pass infra/check_site.py (CSP, Static Web Apps limits), and the
+# home page and a chapter page are audited with Lighthouse's Agentic browsing category. The built
+# editions are attached to the run, so a pull request can be read as a PDF before it is merged.
+# While manuscript/ is empty, everything runs on the build fixture (tools/fixtures/manuscript).
+# Uses no secrets.
+name: Book CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: book-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: tools/requirements.txt
+      - name: Install the build tools
+        run: |
+          pip install -r tools/requirements.txt
+          python -m playwright install --with-deps chromium
+      - name: Which manuscript (the book, or the build fixture while the book is empty)
+        id: ms
+        run: |
+          n="$(python3 -c 'import sys; sys.path.insert(0, "tools"); import bookmd; print(len(bookmd.read_booktxt("manuscript")))' 2>/dev/null || echo 0)"
+          if [ "$n" -gt 0 ]; then echo "dir=manuscript" >> "$GITHUB_OUTPUT"; echo "Building manuscript/ ($n files)";
+          else echo "dir=tools/fixtures/manuscript" >> "$GITHUB_OUTPUT"; echo "::notice::manuscript/ is empty; building the fixture"; fi
+      - name: CHANGELOG has a section for the version in tools/book.json
+        run: |
+          v="$(python3 -c 'import json; print(json.load(open("tools/book.json"))["version"])')"
+          grep -Eq "^## \[$v\]" CHANGELOG.md || { echo "::error file=CHANGELOG.md::no '## [$v]' section"; exit 1; }
+      - name: Manuscript lint
+        run: python tools/lint_manuscript.py --manuscript "${{ steps.ms.outputs.dir }}"
+      - name: Web edition
+        run: |
+          python tools/build.py zip --manuscript "${{ steps.ms.outputs.dir }}" 2>&1 | tee site.log
+          ! grep -q '^warning:' site.log
+      - name: Site check (CSP, Static Web Apps limits, agent files)
+        run: python infra/check_site.py dist/site
+      - name: EPUB
+        run: |
+          python tools/build.py epub --manuscript "${{ steps.ms.outputs.dir }}" 2>&1 | tee epub.log
+          ! grep -q '^warning:' epub.log
+      - name: PDF (7 x 9.25 in)
+        run: |
+          python tools/build.py pdf --manuscript "${{ steps.ms.outputs.dir }}" 2>&1 | tee pdf.log
+          ! grep -q '^warning:' pdf.log
+      - name: Print PDF (7.5 x 9.25 in, KDP)
+        run: |
+          python tools/build.py print --manuscript "${{ steps.ms.outputs.dir }}" 2>&1 | tee print.log
+          ! grep -q '^warning:' print.log
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: EPUBCheck
+        run: |
+          curl -sSL -o /tmp/epubcheck.zip https://github.com/w3c/epubcheck/releases/download/v5.2.1/epubcheck-5.2.1.zip
+          unzip -q /tmp/epubcheck.zip -d /tmp
+          java -jar /tmp/epubcheck-5.2.1/epubcheck.jar dist/*.epub
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Agent-readiness audit (Lighthouse Agentic browsing, WebMCP enabled)
+        run: |
+          python tools/serve.py dist/site --port 8080 > serve.log 2>&1 &
+          sleep 2
+          chrome="$(python -c 'from playwright.sync_api import sync_playwright as s; p = s().start(); print(p.chromium.executable_path); p.stop()')"
+          page="$(python3 -c 'import json; e = [x for x in json.load(open("dist/site/toc.json"))["entries"] if x["kind"] in ("chapter", "appendix")]; print(e[0]["url"] if e else "about.html")')"
+          for url in "" "$page"; do
+            name="lh-${url:-index}"
+            CHROME_PATH="$chrome" npx --yes lighthouse@13.6.0 "http://localhost:8080/$url" --only-categories=agentic-browsing \
+              --output=json --output-path="$name.json" --quiet --chrome-flags="--headless=new --no-sandbox --enable-features=WebMCPTesting"
+            python3 tools/agentic_report.py "$name.json" | tee -a "$GITHUB_STEP_SUMMARY"
+          done
+          kill %1 || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: book-${{ github.sha }}
+          path: |
+            dist/*.pdf
+            dist/*.epub
+            dist/*.zip
+            lh-*.json
+          retention-days: 14
