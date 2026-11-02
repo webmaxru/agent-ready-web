@@ -25,6 +25,9 @@ jobs:
   build:
     runs-on: ubuntu-24.04
     timeout-minutes: 40
+    defaults:
+      run:
+        shell: bash   # -eo pipefail: a failing command before a pipe fails the step
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -88,7 +91,7 @@ jobs:
             name="lh-${url:-index}"
             CHROME_PATH="$chrome" npx --yes lighthouse@13.6.0 "http://localhost:8080/$url" --only-categories=agentic-browsing \
               --output=json --output-path="$name.json" --quiet --chrome-flags="--headless=new --no-sandbox --enable-features=WebMCPTesting"
-            python3 tools/agentic_report.py "$name.json" | tee -a "$GITHUB_STEP_SUMMARY"
+            python3 tools/agentic_report.py "$name.json" --min-tools 3 | tee -a "$GITHUB_STEP_SUMMARY"
           done
           kill %1 || true
       - uses: actions/upload-artifact@v4

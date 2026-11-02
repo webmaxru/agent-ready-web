@@ -83,6 +83,9 @@ jobs:
     needs: resolve
     runs-on: ubuntu-24.04
     timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
     env:
       TAG: ${{ needs.resolve.outputs.tag }}
     outputs:
