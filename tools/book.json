@@ -1,0 +1,78 @@
+{
+  "title": "The Agent-Ready Web",
+  "subtitle": "How to make your website work for AI agents, layer by layer",
+  "author": "Maxim Salnikov",
+  "author_url": "https://github.com/webmaxru",
+  "author_same_as": [
+    "https://github.com/webmaxru",
+    "https://www.linkedin.com/in/webmax/"
+  ],
+  "year": "2026",
+  "version": "1.0.0",
+  "edition": "First edition, November 2026",
+  "checked_as_of": "November 2026",
+  "tested_with": "Standards, specifications and tools checked as of {checked_as_of}",
+  "language": "en",
+  "eyebrow": "A book about agent-readiness",
+  "description": "A practical book for whole web teams on making a website work for AI agents: semantic HTML, structured data, llms.txt, crawler controls, APIs and MCP, WebMCP, agent identity, security, privacy and measurement, built up layer by layer on one running example.",
+  "tagline": "AI agents already read, click and call tools on your site. This book shows every person on a web team how to make that work on purpose, one layer at a time, and how to measure it.",
+  "copyright_lines": [
+    "© 2026 Maxim Salnikov. All rights reserved.",
+    "No part of this book may be reproduced or transmitted in any form or by any means without the prior written permission of the author, except for brief quotations in reviews and articles.",
+    "Demo code and examples are released under the MIT License: https://github.com/webmaxru/agent-ready-web-demos",
+    "The standards, APIs, tools and data in this book were checked as of {checked_as_of}, except where the text marks them as unverified. Many of them are drafts that change; check the cited sources for later changes.",
+    "Product names are trademarks of their owners. The businesses, people and code in the book's running example (Nordlys Cabins) are fictional."
+  ],
+  "site_url": "https://agent-ready-web.salnikov.no",
+  "repo_url": "https://github.com/webmaxru/agent-ready-web",
+  "demo_url": "https://github.com/webmaxru/agent-ready-web-demos",
+  "companion_book": {
+    "title": "Tools, Not Clicks: Building Agent-Ready Websites with WebMCP",
+    "url": "https://webmcp.salnikov.no"
+  },
+  "newsletter_url": "https://isainative.substack.com/subscribe",
+  "contact_url": "https://www.linkedin.com/in/webmax/",
+  "file_stem": "The-Agent-Ready-Web-Maxim-Salnikov",
+  "html_zip_stem": "The-Agent-Ready-Web-HTML",
+  "agent_ready": {
+    "content_signal": "search=yes, ai-input=yes, ai-train=no",
+    "training_crawlers": "follow-content-signal",
+    "ai_crawlers": {
+      "search": [
+        "OAI-SearchBot",
+        "Claude-SearchBot",
+        "PerplexityBot"
+      ],
+      "user": [
+        "ChatGPT-User",
+        "Claude-User",
+        "Perplexity-User"
+      ],
+      "training": [
+        "GPTBot",
+        "ClaudeBot",
+        "Google-Extended",
+        "Applebot-Extended",
+        "CCBot",
+        "Bytespider",
+        "Amazonbot",
+        "meta-externalagent"
+      ]
+    },
+    "llms_full_txt": true,
+    "markdown_pages": true,
+    "json_ld": true,
+    "feed": true,
+    "webmcp": {
+      "imperative_tool": true,
+      "declarative_form": true
+    },
+    "agent_skill": true,
+    "ard_manifest": true,
+    "publisher_domain": "salnikov.no",
+    "origin_trial_token": ""
+  },
+  "cta_label": "Get updates",
+  "cta_blurb": "New editions and corrections by email, from Maxim's newsletter.",
+  "publisher_cta": false
+}
