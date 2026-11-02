@@ -150,8 +150,14 @@ def header_html(s, cfg):
     return (f'<header class="chapter-header"><div class="chapter-header-inner"><nav class="breadcrumb" aria-label="Breadcrumb">{"".join(crumbs)}</nav>'
             f'{label}<h1>{esc(s.title)}</h1></div></header>')
 
+
+def _unlink(html):
+    """Drop links inside a heading (linkify turns a domain name in a heading into one), so the
+    heading anchor never nests a link: nested links leave the anchor with no accessible name."""
+    return re.sub(r'<a\b[^>]*>(.*?)</a>', r'\1', html, flags=re.S)
+
 def add_heading_anchors(body):
-    return re.sub(r'<h([234]) id="([^"]+)">(.*?)</h\1>', lambda m: f'<h{m.group(1)} id="{m.group(2)}"><a class="heading-anchor" href="#{m.group(2)}">{m.group(3)}</a></h{m.group(1)}>', body, flags=re.S)
+    return re.sub(r'<h([234]) id="([^"]+)">(.*?)</h\1>', lambda m: f'<h{m.group(1)} id="{m.group(2)}"><a class="heading-anchor" href="#{m.group(2)}">{_unlink(m.group(3))}</a></h{m.group(1)}>', body, flags=re.S)
 
 # ------------------------------------------------------------------ pages
 def link_mapper(secs):
