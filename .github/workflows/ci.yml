@@ -11,7 +11,7 @@ name: Book CI
 on:
   pull_request:
   push:
-    branches: [main, scaffold]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
