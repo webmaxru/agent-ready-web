@@ -1,0 +1,41 @@
+## Chapter 7: Designing tools agents can actually use
+
+Carried from the v1 validation tables (validated 2026-11-02) for the v2 condensation, 2026-11-04. Status, source URL and retrieved date are unchanged from v1.
+
+| # | Claim / API / listing (short) | Status | Source URL | Retrieved | Note | v1 row |
+|---|---|---|---|---|---|---|
+| 1 | MCP tools/list carries name, title, description, inputSchema, outputSchema, annotations | VERIFIED | https://modelcontextprotocol.io/specification/2026-07-28/server/tools | 2026-11-02 | spec page read 2 Nov 2026 | v1 ch10 #1 |
+| 2 | MCP tool names SHOULD be 1-128 chars, letters digits _ - . | VERIFIED | https://modelcontextprotocol.io/specification/2026-07-28/server/tools | 2026-11-02 | 'Tool names SHOULD be between 1 and 128 characters' | v1 ch10 #2 |
+| 3 | structuredContent SHOULD also be returned as serialized JSON in a TextContent block | VERIFIED | https://modelcontextprotocol.io/specification/2026-07-28/server/tools | 2026-11-02 | quote in spec | v1 ch10 #3 |
+| 4 | Tool execution errors with isError:true, 'actionable feedback ... self-correct and retry' | VERIFIED | https://modelcontextprotocol.io/specification/2026-07-28/server/tools | 2026-11-02 | quote in spec | v1 ch10 #4 |
+| 5 | Human in the loop SHOULD be able to deny invocations, annotations untrusted unless trusted server | VERIFIED | https://modelcontextprotocol.io/specification/2026-07-28/server/tools | 2026-11-02 | R3 1.29 | v1 ch10 #5 |
+| 6 | Annotations post 'Tool Annotations as Risk Vocabulary' by Ola Hungerford, 16 Mar 2026 | VERIFIED | https://blog.modelcontextprotocol.io/posts/2026-03-16-tool-annotations/ | 2026-11-02 | page read 2 Nov 2026 | v1 ch10 #6 |
+| 7 | tools/list SHOULD be deterministic order (prompt cache), ttlMs + cacheScope on list results | VERIFIED | https://modelcontextprotocol.io/specification/2026-07-28/changelog | 2026-11-02 | Key Changes page | v1 ch10 #7 |
+| 8 | Server-minted handles passed back as arguments (2026-07-28 blog) | VERIFIED | https://blog.modelcontextprotocol.io/posts/2026-07-28/ | 2026-11-02 | R3 1.17 | v1 ch10 #8 |
+| 9 | Copilot Studio REST API tools from OpenAPI, AgentCore Gateway OpenAPI->MCP | VERIFIED | https://learn.microsoft.com/en-us/microsoft-copilot-studio/agent-extend-action-rest-api ; https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway.html | 2026-11-02 | R3 3.17, 3.20 | v1 ch10 #9 |
+| 10 | OpenAI function calling: intern test, enums/object structure, combine sequential functions, fewer than 20 'soft suggestion' | VERIFIED | https://developers.openai.com/api/docs/guides/function-calling | 2026-11-02 | quotes read 2 Nov 2026 | v1 ch10 #10 |
+| 11 | OpenAI Chat Completions rejects 'nordlys.search' (pattern ^[a-zA-Z0-9_-]+$) and names > 128 | VERIFIED | local API call via model proxy, 2 Nov 2026 | 2026-11-02 | 400 error text quoted; 65 chars accepted | v1 ch10 #11 |
+| 12 | Anthropic Messages rejects dots, pattern ^[a-zA-Z0-9_-]{1,128}$ | VERIFIED | local API call via model proxy, 2 Nov 2026 | 2026-11-02 | 400 error text quoted | v1 ch10 #12 |
+| 13 | Anthropic 'Writing effective tools for agents' 11 Sep 2025: namespacing, user vs user_id, high signal, UUIDs, 25,000 token limit, actionable errors, metrics | VERIFIED | https://www.anthropic.com/engineering/writing-tools-for-agents | 2026-11-02 | quotes read 2 Nov 2026 | v1 ch10 #13 |
+| 14 | Chrome best practices: execution vs initiation (create-event vs start-event-creation-process), positive language, validate strictly in code loosely in schema, confirmation recompute state, evaluation-driven development | VERIFIED | https://developer.chrome.com/docs/ai/webmcp/best-practices | 2026-11-02 | updated 30 Oct 2026, quotes read 2 Nov 2026 | v1 ch10 #14 |
+| 15 | Chrome build-tools: pin versions | VERIFIED | https://developer.chrome.com/docs/ai/webmcp/build-tools | 2026-11-02 | updated 30 Oct 2026 | v1 ch10 #15 |
+| 16 | RFC 9457 Problem Details | VERIFIED | https://www.rfc-editor.org/rfc/rfc9457.html | 2026-11-02 | R3 3.10 | v1 ch10 #16 |
+| 17 | Idempotency-Key draft-08 dated 22 Oct 2026 | VERIFIED | https://www.ietf.org/archive/id/draft-ietf-httpapi-idempotency-key-header-08.txt | 2026-11-02 | R3 3.11 | v1 ch10 #17 |
+| 18 | Nordlys booking service remembers idempotency keys 24 h, refuses reused key with different input, replays result | VERIFIED | demos nordlys-cabins/layers/07-public-api/service.js | 2026-11-02 | code read | v1 ch10 #18 |
+| 19 | Eval models served as gpt-4.1-mini-2025-04-14, gpt-5.4-mini-2026-03-17, claude-haiku-4-5-20251001, claude-haiku-5-5 | VERIFIED | results/*.md 'models served as' | 2026-11-02 | API-reported model ids | v1 ch10 #19 |
+| 20 | Table 10.1 and Figure 10.2 numbers (before 21/18/24/45, after 55/54/52/55 of 55; per task) | VERIFIED | results/2026-11-02.json (before) and results/2026-11-02-after-final.json (after) | 2026-11-02 | re-scored with final checks | v1 ch10 #20 |
+| 21 | 40 before-episodes hit 404: 10 recovered, 14 estimated, 11 asked, 5 said cabin missing | VERIFIED | results/2026-11-02.json | 2026-11-02 | computed 2 Nov 2026 | v1 ch10 #21 |
+| 22 | Before set: cancel-needs-confirmation 0/20, 11 of 20 cancelled; retry 0/20 | VERIFIED | results/2026-11-02.json | 2026-11-02 | computed | v1 ch10 #22 |
+| 23 | After set: all 20 cancel-needs runs called find_booking only | VERIFIED | results/2026-11-02.json | 2026-11-02 | computed | v1 ch10 #23 |
+| 24 | Idempotency key reused in 19 of 20 main-run after episodes, 1 tried a fresh key first | VERIFIED | results/2026-11-02.json | 2026-11-02 | computed | v1 ch10 #24 |
+| 25 | Iterations: hint 4/5->0/5 (too-many, gpt-5.4-mini), nearMisses 5/5; description sentence 4/5 then 1/5; stayTotal 10/10 | VERIFIED | results/2026-11-02-iteration*.json, -after-v3.json | 2026-11-02 | results/README.md documents versions | v1 ch10 #25 |
+| 26 | Final run: claude-haiku-4-5 set acceptTerms without asking once (book-needs-confirmation 4/5), read 12/03 as Dec 3 twice | VERIFIED | results/2026-11-02-after-final.json | 2026-11-02 | episodes read | v1 ch10 #26 |
+| 27 | Two checks fixed after reading failures, re-scored without model calls | VERIFIED | eval.mjs --rescore, results/README.md | 2026-11-02 | before 23->24, 20->21; after v1 46->50, 54->55 | v1 ch10 #27 |
+| 28 | Lint: before 8 errors 20 warnings, after 0/0; audit '5 tools, 0 errors', 4 warnings on Ch8 tools | VERIFIED | node lint.mjs; tests/ch10-tool-design.test.js | 2026-11-02 | run 2 Nov 2026 | v1 ch10 #28 |
+| 29 | Small models are what most production agents use for tool calls | OPINION | author | 2026-11-02 | framed as reasoning | v1 ch10 #29 |
+| 30 | 'Before' set is a simulation of naive generation, not a product's output | OPINION | author | 2026-11-02 | stated in text and in before.mjs | v1 ch10 #30 |
+| 31 | Willison 'lethal trifecta' (16 Jun 2025): private data + untrusted content + external communication; 'Guardrails won't protect you' | VERIFIED | https://simonwillison.net/2025/Jun/16/the-lethal-trifecta/ | 2026-11-02 | R4 §2 | v1 ch16 #15 |
+| 32 | Meta 'Agents Rule of Two': no more than two of untrusted input / sensitive systems or data / change state or communicate externally (via Oso) | VERIFIED | https://www.osohq.com/learn/agents-rule-of-two-a-practical-approach-to-ai-agent-security | 2026-11-02 | Meta's own post refused fetch; secondary source named in text | v1 ch16 #16 |
+| 33 | Applying Rule of Two per tool is the author's lens | OPINION | — | — | Text frames it as 'I use them as a lens' | v1 ch16 #17 |
+| 34 | OWASP cheat sheet: indirect sources incl. user reviews, web pages, 'hidden text in web pages'; 'Enforce permissions and parameter validation at the tool boundary' | VERIFIED | https://cheatsheetseries.owasp.org/cheatsheets/LLM_Prompt_Injection_Prevention_Cheat_Sheet.html | 2026-11-02 | R4 §2 | v1 ch16 #18 |
+| 35 | MCP security best practices: scope minimisation; 'Poor scope design increases token compromise impact...'; no token passthrough; 'MCP proxy servers MUST implement per-client consent' | VERIFIED | https://modelcontextprotocol.io/docs/2026-07-28/tutorials/security/security_best_practices | 2026-11-02 | R4 §3 | v1 ch16 #25 |

@@ -1,6 +1,31 @@
-# Validation report — The Agent-Ready Web
+# Validation report — Agent-Ready Websites in Action
 
 This file records how the book was checked against the specifications, documentation and tools it describes. Each chapter gets one table: every factual statement, number, quote, listing and status claim, the source it was checked against (URL and retrieval date), and the outcome (confirmed, corrected in the text, or marked unverified). The tables are added as the chapters are written and checked.
+
+## Second edition (v2.0.0, draft of 4 November 2026)
+
+The second edition condenses the 20 chapters of v1.0.0 into 12. No claim was added without a row: every kept number, date, version, quote and URL carries its v1 row (the "v1 row" column names it, for example `v1 ch15 #12`), with the v1 status, source and retrieval date unchanged. Rows for v1 passages that were cut stay in the tables for traceability. New rows exist for the section "Two ways to buy" in Chapter 11, reused from the verified validation of *Tools, Not Clicks* v2.1.0 (UCP specification 2026-08-25, Shopify's Checkout WebMCP documentation and three live `/.well-known/ucp` fetches, all on 4 November 2026), and for linking text that rests on existing rows (marked as such). The v1 tables stay on the `v1.0.0` tag.
+
+| Table | Rows | Verified | Unverified | Opinion |
+| --- | --- | --- | --- | --- |
+| `validation/01-the-agent-ready-web.md` | 53 | 52 | 0 | 1 |
+| `validation/02-your-first-agent-ready-page.md` | 39 | 38 | 0 | 1 |
+| `validation/03-how-agents-see-a-page.md` | 43 | 40 | 0 | 2 |
+| `validation/04-who-gets-in.md` | 87 | 79 | 1 | 7 |
+| `validation/05-content-agents-can-read.md` | 44 | 40 | 2 | 2 |
+| `validation/06-choosing-the-right-agent-interface.md` | 40 | 36 | 1 | 3 |
+| `validation/07-designing-tools-agents-can-use.md` | 35 | 32 | 0 | 3 |
+| `validation/08-server-side-tools-and-discovery.md` | 93 | 89 | 0 | 4 |
+| `validation/09-in-page-tools-with-webmcp.md` | 56 | 52 | 0 | 4 |
+| `validation/10-security-for-agent-facing-sites.md` | 36 | 34 | 0 | 2 |
+| `validation/11-agents-acting-for-users.md` | 139 | 128 | 3 | 8 |
+| `validation/12-testing-and-measuring-in-production.md` | 132 | 122 | 2 | 8 |
+| `validation/appendix-a-checklist-by-role.md` | 11 | 0 | 0 | 0 |
+| `validation/appendix-b-reference.md` | 54 | 22 | 0 | 0 |
+| `validation/appendix-c-pay-per-crawl-and-licensing.md` | 30 | 27 | 1 | 2 |
+| `validation/appendix-d-glossary-and-resources.md` | 28 | 0 | 0 | 0 |
+
+Rows marked UNVERIFIED are hedged in the text where the text still uses them. Appendix A, B and D rows marked "as in v1" point to the chapter rows they summarise.
 
 ## Sources
 

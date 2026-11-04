@@ -1,22 +1,10 @@
-# Chapter 1 editorial log: The agent-ready web
+# Chapter 1 editorial log (v2)
 
-Writer W1, 2 November 2026. Method: the Book 2 voice method (PROFILE.md, REPORT.md, MEANING-DAMAGE-v6.md, personal-author-voice and professional-writing-editor skills). No detectors or humanizers were run.
-
-## Pass 1: voice draft
-- Structure from OUTLINE.md: visitors (five groups), Chrome's searching vs using, six layers, the two graders and why they disagree, adoption and platforms, Nordlys Cabins, reading paths per role. Preface and About-this-book topics left to the front-matter writer.
-- First person for judgment ("I find that comforting"), tutorial "let's", reader "you". Personal colour only from author facts (Oslo, PWA speaker and writer).
-- Every number taken from R1/R2 fact tables with dates in the sentence or footnote.
-
-## Pass 2: substantive edit (professional-writing-editor)
-- Opening scene kept generic and fictional (no invented customer). Tied to the measured Chapter 2 result instead of an anecdote.
-- Removed a reference to the Manning editor's private email as the reason for the running example.
-- Removed an unverifiable claim that no vendor sponsored the book.
-- Removed Meta-ExternalAgent from the training-crawler list (vendor page could only be read as a snippet). It stays in the Radar table, where the data is verified.
-- Added "Does it pay off?" with only measured evidence (Cloudflare docs benchmark, Markdown token reduction) and an explicit statement that no independent conversion study exists.
-- Role-readability: every layer section names its owner. Hands-on note before the only code block. Reading-path table per role.
-- Softened the April vs November adoption comparison (different filtering) and corrected "roughly doubled" to "more than doubled" (4% to 8.9%).
-
-## Pass 3: voice recheck and fidelity
-- Added signature moves sparingly: "I bet", "Let's have a look", "Of course", "In simple words", "Please note:", "Bottomline:", one ":)", seven spaced em dashes.
-- Zero semicolons in prose, no "not X, but Y", none of the banned words (lint script).
-- Fidelity: every number, quote, check id and date compared with shared/validation/01-the-agent-ready-web.md. Cloudflare benchmark quote re-read on the page today. Post title taken from the page h1.
+- Sources: v1 ch1 (8,178 words), v1 ch13 "A staged adoption plan" and "Where Nordlys stops" (condensed into the new section "Deciding how far to go").
+- Result: 6,609 words (budget 6,300, range 5,670-6,615).
+- Figures kept: 1.1 -> 1.1, 1.2 -> 1.2 (layer-to-chapter column re-pointed to v2: 12, 4/10/11, 6 to 9, 5), 1.3 -> 1.3 (Chapter 18 -> 12).
+- Tables: 1.1 traffic (cut to 4 rows), 1.2 level ladder, 1.3 adoption (cut to 11 rows), 1.4 staged plan (from v1 Table 13.2, chapters re-pointed, level quotes shortened to the level number), 1.5 reading paths (re-mapped to v2 chapters, "skim" column dropped).
+- Listings: none (one unnumbered shell snippet kept byte-identical, with a sentence on first-edition layer numbers).
+- Cut: crawl-to-refer June 2025 range, Anthropic pixel-coordinates quote, top-bots and crawl-per-referral table rows, the isitagentready API/MCP paragraph, Lighthouse failing on Chrome/Vercel/isitagentready, the wildcard AI-rules point, Radar e-commerce counts, Cloudflare managed robots.txt 3.8M domains, the 16,180 vs 3,150 token example, the PWA history paragraph, /__layers, "Why layers" second paragraph, the "skim" column.
+- New: "Deciding how far to go" (five ambitions: read, find, act as guest, act for member, pay) is editorial framing over existing material, no new facts. Backed by v1 ch13 #30, #31, #32, #35 and v1 ch1 #42.
+- Unverified: nothing new.

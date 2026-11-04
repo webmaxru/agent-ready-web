@@ -1,6 +1,6 @@
-# The Agent-Ready Web
+# Agent-Ready Websites in Action
 
-This repository holds the manuscript of *The Agent-Ready Web: How to make your website work for AI agents, layer by layer* by Maxim Salnikov (working title), together with its figure sources, editorial records, theme, build tools and hosting setup. The runnable demos, including the running example Nordlys Cabins, live in the companion repository [webmaxru/agent-ready-web-demos](https://github.com/webmaxru/agent-ready-web-demos). The web edition is hosted on Azure Static Web Apps at https://agent-ready-web.salnikov.no once deployed (see [`DEPLOY.md`](DEPLOY.md)).
+This repository holds the manuscript of *Agent-Ready Websites in Action: How to make your website work for AI agents, layer by layer* by Maxim Salnikov (second edition, version 2.0.0, 12 chapters in three parts; the first edition, *The Agent-Ready Web* v1.0.0 with 20 chapters, is tagged `v1.0.0`), together with its figure sources, editorial records, theme, build tools and hosting setup. The runnable demos, including the running example Nordlys Cabins, live in the companion repository [webmaxru/agent-ready-web-demos](https://github.com/webmaxru/agent-ready-web-demos). The web edition is hosted on Azure Static Web Apps at https://agent-ready-web.salnikov.no once deployed (see [`DEPLOY.md`](DEPLOY.md)).
 
 The book develops the ideas of the author's earlier book, *Tools, Not Clicks: Building Agent-Ready Websites with WebMCP* ([webmcp.salnikov.no](https://webmcp.salnikov.no)), into the whole field of agent-readiness, and this repository uses the same layout and build.
 

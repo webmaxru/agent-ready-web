@@ -146,15 +146,13 @@ Here is the complete server-HTML view of the legacy page, as the script saved it
 - text: Fjellro © Nordlys Cabins (fictional) Find a booking · Terms · Contact
 ```
 
-Please note: the clean page has 23 interactive nodes in the full tree but only 15 lines in the ARIA snapshot. The difference is the two date inputs. Chromium's full tree exposes the parts inside each native date field, a "Show date picker" button and separate month, day and year spin buttons, while Playwright's snapshot shows each date field as one textbox. Different tools give an agent different granularity of the same tree, which is one reason why the same page can work well with one agent and poorly with another.
+Please note: the clean page has 23 interactive nodes in the full tree but only 15 lines in the ARIA snapshot, because Chromium's full tree exposes the parts inside each native date field, while Playwright's snapshot shows each date field as one textbox. Different tools give an agent different granularity of the same tree.
 
 ### Seeing your own pages the way agents do
 
-You do not need my script to look at these views. Three tools that you probably have already are enough for a first look.
+**Chrome DevTools.** The Accessibility pane in the Elements panel shows the role, name, description and states of the selected element, and where the name came from. Chrome DevTools also has a full-page accessibility tree: "when you toggle the new tree, it replaces the DOM tree view and allows you to see the full accessibility tree for the page".[^ch03-10] It is the closest you get to reading the page with an agent's eyes.
 
-**Chrome DevTools.** The Accessibility pane in the Elements panel shows the role, name, description and states of the selected element, and where the name came from. Chrome DevTools also has a full-page accessibility tree: "when you toggle the new tree, it replaces the DOM tree view and allows you to see the full accessibility tree for the page".[^ch03-10] I bet you will find at least one surprise if you spend ten minutes with it on your own most important page. It is the closest you get to reading the page with an agent's eyes.
-
-**Switching JavaScript off.** In DevTools, the command menu has "Disable JavaScript". Reload the page and you see View 1, the page as fetch-only agents get it. If your main content or your forms disappear, so do they for those agents.
+**Switching JavaScript off.** In DevTools, the command menu has "Disable JavaScript". Reload the page and you see View 1. If your main content or your forms disappear, so do they for fetch-only agents. The section "Rendering for client-rendered apps" later in this chapter is about that case.
 
 **Playwright ARIA snapshots.** `await page.locator('body').ariaSnapshot()` gives you the YAML view we used above, and `expect(locator).toMatchAriaSnapshot()` turns it into a test. Playwright's documentation shows how to match only parts of the tree, by leaving out names or attributes you do not care about.[^ch03-9] A snapshot test for the availability form of a cabin page could look like this:
 
@@ -167,9 +165,6 @@ await expect(page.getByRole('region', { name: 'Check availability' })).toMatchAr
   - button "Check availability"
 `);
 ```
-
-Such a test fails when someone renames the button, drops a label or replaces the form with a widget. That makes it a cheap guard for the paths that matter most to your business.
-
 
 ## How the browser builds the accessibility tree
 
@@ -240,12 +235,9 @@ To feel the difference, read the clean availability form the way an agent's mode
   - group: Dates that are already taken
 ```
 
-Try to plan the task "check Fjellro for 2 to 5 December, three guests" from these lines alone. The region name tells you that you are in the right place. Two textboxes are named for the two dates you have. The spinbutton is named "Guests", its current value is 2, and the paragraph right before it says the limit is six. There is one button, and its name says what it does. Below it sits an empty `status` element, which is where the result will appear. A model needs no screenshot and no guessing to produce a plan of four actions, and after the fourth it knows where to look for the answer.
+Try to plan the task "check Fjellro for 2 to 5 December, three guests" from these lines alone. The region name tells you that you are in the right place. Two textboxes are named for the two dates you have. The spinbutton is named "Guests". There is one button, and its name says what it does, and below it sits an empty `status` element, where the result will appear. A model needs no screenshot and no guessing to plan four actions, and after the fourth it knows where to look for the answer. With the legacy snapshot, two textboxes named by their placeholders and the text "− 2 + Check", every step is a guess, and every guess costs a screenshot, a coordinate and a check of the result.
 
 Anthropic's browser tool makes this explicit. Its `read_page` action returns the accessibility tree as text, with each element tagged with a reference such as `[ref_2]`, and it can filter the tree to interactive elements only.[^ch03-2] The model then says "type into ref_5" instead of "click at 412, 388". Every name in the tree becomes something the model can talk about, and every missing name becomes something it has to guess.
-
-Now try the same task with the legacy snapshot. You have two textboxes named by their placeholders and the text "− 2 + Check". You can probably guess that the minus and plus change the number and that "Check" is a button, because you are a person who has seen such widgets. A model can guess too. But a guess costs a screenshot, a coordinate and a check of the result, and every guess can be wrong.
-
 
 ![Figure 3.2 — From markup to tree. On the left, the legacy widget: div elements with click handlers become ignored containers and their text collapses into one line. On the right, the semantic form: each element maps to a role, the label gives the name, the hint gives the description and attributes give states.](images/figure-3-2.png)
 
@@ -315,8 +307,7 @@ Beyond forms, these are the patterns I find most often when I look at the trees 
 - **Content that appears only on hover or scroll.** An action that shows up only when the mouse is over a card, or a list that loads more items only on scroll, may not exist at the moment the agent reads the tree. Make actions visible by default and give long lists real pagination links.
 - **`aria-hidden` in the wrong place.** Teams sometimes hide a whole section from the tree to "clean up" what screen readers announce. Agents lose it too.
 
-One more pattern belongs to security more than to perception, and Chapter 16 treats it properly: text that is in the DOM but not visible. Anthropic's documentation tells developers who build agents to read pages from "what the page renders (the accessibility tree or visible text), not raw DOM source, so hidden text doesn't reach Claude".[^ch03-2] That is advice for agent builders, but it says something to site owners too. The rendered tree is what careful agents read, so that is the view to get right.
-
+One more pattern belongs to security more than to perception, and Chapter 10 treats it properly: text that is in the DOM but not visible. Anthropic tells developers who build agents to read pages from "what the page renders (the accessibility tree or visible text), not raw DOM source, so hidden text doesn't reach Claude".[^ch03-2] The rendered tree is what careful agents read, so that is the view to get right.
 
 ## The 33 rules behind Lighthouse's agent audit
 
@@ -502,6 +493,30 @@ The legacy front end has no booking page, only an overlay, so the audit checks 1
 
 The tests for this chapter, `tests/ch03-perception.test.js` and `tests/ch03-perception.spec.js`, check the contract on both front ends, run the 33 axe rules on both, compare the full rule set, run the broken fixture and capture the three views. If someone on the team replaces a button with a styled `<div>` next month, a test fails before the change reaches users or agents.
 
+## Rendering for client-rendered apps
+
+Most of this chapter looked at the rendered page, because browsing agents run a real browser. But View 1 deserves its own section, because it is where many modern front ends lose agents before any tree is built. The legacy Fjellro page is a small model of a client-rendered app: the server sends a shell of 2.1 KB, and the page's own script fetches the cabin data and injects the widget about 400 milliseconds after the page loads. A person never notices. Three kinds of visitor do.
+
+The first is every agent that never runs JavaScript: the crawlers, the user-triggered fetchers and the "fetch this URL" tools from View 1. For them the legacy page is a name, three images and a footer. The second is a browsing agent that reads too early. If it takes its snapshot before the widget arrives it sees the same shell, and if it acts just after, the layout shift we measured in Chapter 2 moves the target under it. The third waits, and then meets a widget built from `<div>` elements, which is the perception problem from the rest of this chapter.
+
+The clean front end avoids the first two problems with one decision: the server sends complete HTML. Its first response carries all 15 interactive elements (Table 3.2), so a fetch-only agent already sees the form and a browsing agent has nothing to wait for. The decision comes in three shapes.
+
+### Server-side rendering
+
+With server-side rendering (SSR), the server runs your components for each request, or once at build time for pages that rarely change, and sends finished HTML. For agents the rule is simple: the content a page exists for and the controls for its key task belong in the first response. Personal parts, such as a "my bookings" badge, can arrive later.
+
+### Hydration
+
+SSR alone gives you a page that a fetch-only agent can read but nobody can use until JavaScript attaches its behaviour. That step is hydration: the client-side framework takes over the server's HTML, attaches event handlers and keeps the state. Two things go wrong with agents here. First, a page that renders one thing on the server and something different after hydration (a different layout, a different set of buttons, a skeleton that is replaced) shows the agent two pages, and the swap between them is a layout shift. Keep the server output and the hydrated output the same, and reserve space for anything that changes. Second, controls that look ready but do nothing until hydration finishes are a trap for an agent that acts quickly. A native form avoids the trap, because the browser can submit it before any script runs.
+
+### No-JavaScript fallbacks
+
+That leads to the most robust pattern, which is also the oldest one: progressive enhancement. Build the key task so that it works with plain HTML (a real `<form>` with a `method` and an `action`, real links with real URLs), and let JavaScript make it nicer. The clean availability form from Chapter 2 is exactly that: a `GET` form with an `action` on the cabin page, complete in the HTML the server sends. The declarative WebMCP tool in Chapter 2 builds on the same form, and that is no coincidence. A form that works without script is also a form a browser can turn into a tool.
+
+Where a full fallback is too expensive (a map, a rich editor, a seat picker), give the task a plain route next to it: a list view, a form with the same fields, or an API (Part 2).
+
+> **Tip:** Test View 1 in CI, not only in a browser. `three-views.mjs` already opens the page with JavaScript switched off, and an assertion that the server's HTML contains the key form catches the day someone moves the widget into a client-only component.
+
 ## Stable layout: the part of perception that moves
 
 There is one more thing agents perceive that no tree shows: time. A page that moves while it loads can make an agent act on something that is no longer there.
@@ -517,13 +532,7 @@ Lighthouse puts `cumulative-layout-shift` into its agentic category for this rea
 
 ## What to take back to your team
 
-Perception work touches more roles than any other layer, and each one has a short list.
-
-- **Developers** use native elements, label every field, set input types and `autocomplete` tokens, and use ARIA for names, relationships and states, not to rebuild buttons.
-- **Designers** put visible labels and clear button texts into the design system, so the right markup is the default.
-- **Content people** write link texts and alt texts that stand on their own ("Cancellation terms", not "click here").
-- **QA** runs the 33 agent rules and the full accessibility rules, keeps an agent walk for the main tasks and reviews axe's "needs review" items by hand.
-- **Product managers** add "an agent can complete the task by the accessibility tree" to the definition of done for every flow that matters.
+Perception work touches more roles than any other layer. Developers use native elements and label every field. Designers put visible labels and clear button texts into the design system. Content people write link texts and alt texts that stand on their own. QA runs the 33 agent rules and keeps an agent walk for the main tasks. Product managers add "an agent can complete the task by the accessibility tree" to the definition of done.
 
 Bottomline: everything in this chapter is accessibility work. If your team already takes accessibility seriously, most of your perception layer is done. If it does not, agents are a new and very concrete reason to start.
 
@@ -535,6 +544,7 @@ Bottomline: everything in this chapter is accessibility work. If your team alrea
 - Semantic HTML is the zero-cost baseline. ARIA is for names, relationships and states that HTML cannot express, never a replacement for native elements. "ARIA for AI" advice is a reason to be careful, not a shortcut.
 - Lighthouse's agent audit runs 33 axe rules that check what is in the tree. It catches unnamed controls and broken ARIA, it skips contrast, headings and landmarks, and it ignores axe's "needs review" items. A page with no structure passes it.
 - The perception layer adds a contract for every public page, read from the server's HTML: one main landmark, one `h1`, a language, labelled controls, named buttons, sized images and no click-handler `<div>` elements. It runs in the tests.
+- Client-rendered apps lose fetch-only agents and early readers. Render the key content and controls on the server, keep hydration from changing the page, and make the key task work as a plain HTML form.
 - Stable layout is part of perception. Sized images, server-rendered content and no overlays over actions keep an agent's view valid between reading and acting.
 
 [^ch03-1]: web.dev, "Build agent-friendly websites", updated 1 April 2026, https://web.dev/articles/ai-agent-site-ux (retrieved 2 November 2026).

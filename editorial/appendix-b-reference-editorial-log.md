@@ -1,8 +1,9 @@
-# Editorial log: Appendix B
+# Editorial log: Appendix B, Files, headers and standards at a glance (v2)
 
-- Pass 1 (draft): 10 tables (well-known paths, root files, robots.txt lines, HTTP headers, link relations, markup hooks, DNS, isitagentready checks, Lighthouse audits, standards master list) + status vocabulary + what Nordlys serves.
-- Fact re-checks during pass 1: all RFC dates and statuses re-fetched from rfc-editor.org JSON (corrected RFC 9457 to Aug 2023); OAuth 2.1 latest draft is -17 (31 Oct 2026), noted that MCP cites -13; Web Bot Auth `tag` value `web-bot-auth` read in draft-01.
-- Pass 2 (edit): split long sentences, made the Content-Signal vs Content-Usage distinction explicit, removed one semicolon.
-- Reconciliation with chapters: Chapter 4 cites an individual draft for /.well-known/ai.txt and the expired draft-romm Content Signals draft, so the ai.txt sentence and the Content-Signal rows were corrected; auth.md mapped to Chapters 11 and 14 after Chapter 11 landed.
-- "What Nordlys serves" rewritten from a measured run of the new checker (chapters/appendix-b-reference) against Nordlys with all layers, instead of from the plan.
-- Pass 3 (voice): first person kept for "the reference I wanted on my desk"; reference tables left neutral on purpose.
+- Sources: v1 Appendix B (5,822 words), v1 ch12 Table 12.1 (commerce protocols, now Table B.7), v1 ch20 "Reading a status line" (now Table B.1 and three paragraphs, replacing v1's status-vocabulary list). Result: 2473 words.
+- Tables: v1 B.1 + B.2 -> B.2 (paths, merged, columns cut to four), B.3 robots.txt lines -> one paragraph, B.4 -> B.3 (headers, rows merged), B.5 -> B.4, B.8 -> B.5 (isitagentready checks grouped by level), B.9 -> B.6, ch20 status table -> B.1, ch12 Table 12.1 -> B.7.
+- Cut: markup hooks table (B.6, covered in ch3, ch5, ch9), DNS records table (B.7, dnsAid kept in B.5), the master standards table (B.10, the versions now ride in B.2 and B.3), poppy.json, vacation-rental.json, ai.txt, DPoP, ETag/If-Match, X-Robots-Tag kept, llms-full detail, the curl tip, the full Nordlys "serves" paragraph (now one line plus the skip list).
+- Pointed to Appendix C: x402 and pay per crawl headers, RSL License: line, TDMRep path, per-request payment in Table B.7.
+- Versioning paragraph (Deprecation/Sunset) placed here, as promised in the Chapter 8 editorial log.
+- Footnotes appB-1 to appB-12 (v1 appB-1..7 definitions reused, plus v1 ch20-3, ch20-4, ch20-24, ch12-1 and one measurement note). Validation: 54 rows.
+- Unverified: none.

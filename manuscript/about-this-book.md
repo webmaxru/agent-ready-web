@@ -1,6 +1,6 @@
 # About this book
 
-*The Agent-Ready Web* answers one question: how do I make my site work for AI agents? It does so layer by layer, on one running example, with every claim dated and sourced. This section explains how the book is organised, how to read it depending on your role, the conventions it uses, the code that comes with it and the versions it was tested with.
+*Agent-Ready Websites in Action* answers one question: how do I make my site work for AI agents? It does so layer by layer, on one running example, with every claim dated and sourced. This section explains how the book is organised, how to read it depending on your role, the conventions it uses, the code that comes with it and the versions it was tested with.
 
 ## Who should read this book
 
@@ -8,19 +8,15 @@ This book is for the whole web team: front-end, full-stack and back-end develope
 
 ## How this book is organised: a roadmap
 
-The book has 20 chapters in five parts, plus four appendices.
+The book has 12 chapters in three parts, plus four appendices.
 
-**Part 1, How agents use the web**, sets the scene. Chapter 1 looks at who visits a website today (training crawlers, search and answer engines, fetchers acting for one person, browsing agents and agents that call tools), takes "agent-ready" apart into layers, introduces the two graders the book uses and meets Nordlys Cabins, the running example. Chapter 2 makes one page agent-ready from start to finish, measuring before and after. Chapter 3 shows how agents see a page (DOM, accessibility tree, screenshots) and why semantic HTML is the cheapest agent-readiness work you will ever do.
+**Part 1, Seen and read**, is about the layers every site needs. Chapter 1 looks at who visits a website today, what "agent-ready" means as six layers, how to decide which layers you need, and introduces Nordlys Cabins and the two graders. Chapter 2 makes one page agent-ready end to end, with a first look at your own logs. Chapter 3 shows how agents see a page: the HTML, the accessibility tree and the screenshot, and what client-side rendering does to them. Chapter 4 decides who gets in, with robots.txt, Content Signals and AI Preferences, and checks the claims with IP ranges, reverse DNS and Web Bot Auth. Chapter 5 makes content readable: structured data that stays true to the page, Markdown by content negotiation, llms.txt and sitemaps.
 
-**Part 2, Being found and read**, is about content. Chapter 4 covers who gets in: robots.txt, the AI crawlers and what each vendor documents, Content Signals and the IETF's AI preferences work. Chapter 5 describes your content with schema.org structured data. Chapter 6 makes content easy for agents to read: Markdown versions, content negotiation, llms.txt, sitemaps and Link headers.
+**Part 2, Letting agents act**, is about capabilities for reading and for guests. Chapter 6 chooses the right agent interface for a site. Chapter 7 designs tools that agents can actually use, with a first threat model. Chapter 8 builds server-side tools, a plain API and an MCP server, and announces them through Link headers, the API catalog, MCP server cards, OAuth metadata, Agent Skills and the ARD manifest. Chapter 9 puts tools into the page with WebMCP.
 
-**Part 3, Letting agents act**, is about capabilities. Chapter 7 designs an HTTP API that agents call correctly. Chapter 8 builds a server-side tool layer with the Model Context Protocol. Chapter 9 adds in-page tools with WebMCP. Chapter 10 is about designing tools that agents actually use well, tested against real models. Chapter 11 makes capabilities discoverable through well-known files and catalogs. Chapter 12 covers agents that buy: commerce and payment protocols. Chapter 13 brings it together in a decision framework for choosing the right agent interface.
+**Part 3, Trust and production**, is about running it safely. Chapter 10 covers security for agent-facing sites. Chapter 11 handles agents acting for users: OAuth and delegated access, consent, the human in the loop, the agent-safe checkout and the two ways a shop can let an agent buy. Chapter 12 tests and measures agent-readiness in production and ends with a roadmap for your team.
 
-**Part 4, Trust**, is about safety. Chapter 14 handles agents acting for users with OAuth and delegated access. Chapter 15 tells good agents from bad bots with Web Bot Auth, verified bots and rate limits. Chapter 16 covers security for agent-facing sites, including prompt injection. Chapter 17 covers privacy, consent and keeping a human in the loop.
-
-**Part 5, Production**, is about running it. Chapter 18 tests agent-readiness, both with deterministic checks in CI and with evals against real models. Chapter 19 measures agent traffic and outcomes. Chapter 20 is about evolving with the standards: versioning your interfaces, watching the specifications you depend on and planning a year of work.
-
-The appendices are for reference: Appendix A is a checklist per role, Appendix B lists every file, header and standard at a glance with its status and date, Appendix C is a glossary, and Appendix D collects resources and tools.
+The appendices are for reference: Appendix A is a checklist per role, Appendix B lists every file, header and standard with its status and date (including the commerce protocols), Appendix C covers pay per crawl and content licensing, and Appendix D is a glossary with resources.
 
 ## Reading paths
 
@@ -29,14 +25,14 @@ You can read the book from cover to cover, and the chapters build on each other 
 | Your goal | Read |
 | --- | --- |
 | Understand the topic in one afternoon | Chapters 1 and 2, then the summaries at the end of each chapter |
-| Make a content site readable by agents | Chapters 2 to 6, then 19 |
-| Let agents book, buy or do things on your site | Chapters 2, 3, 7 to 13, then 14 to 16 |
-| Decide what to build (product and architecture) | Chapters 1, 13 and 20, then the chapters 13 points you to |
-| Secure and govern agent access | Chapters 4, 14 to 17 |
-| Put agent-readiness into CI and dashboards | Chapters 2, 18 and 19 |
+| Make a content site readable by agents | Chapters 2 to 5, then 12 |
+| Let agents book, buy or do things on your site | Chapters 2, 3, 6 to 9, then 10 and 11 |
+| Decide what to build (product and architecture) | Chapters 1 and 6, then the chapters 6 points you to |
+| Secure and govern agent access | Chapters 4, 10 and 11 |
+| Put agent-readiness into CI and dashboards | Chapters 2 and 12 |
 | Already read *Tools, Not Clicks* | Skim Chapter 9, read everything else |
 
-Two chapters are worth everyone's time. Chapter 2 shows the whole loop (measure, change one layer, measure again) on a single page, and Chapter 13 is where a team decides what to build.
+Two chapters are worth everyone's time. Chapter 2 shows the whole loop (measure, change one layer, measure again) on a single page, and Chapter 6 is where a team decides what to build.
 
 ## The scorecard
 
@@ -66,9 +62,29 @@ All the code in this book lives in one repository, `webmaxru/agent-ready-web-dem
 
 **Nordlys Cabins** (`nordlys-cabins/`) is the running example: a fictional company that rents six cabins in Norway, with `nordlys.example` as its domain in the book. It has what a real booking site has: a cabin list with filters, cabin pages, an availability check, a booking form with server-side validation, cancellation, member sign-in with "My bookings", a guide with articles, an FAQ and a contact form. Data lives in JSON files and in memory, so there is no database to set up. The booking flow comes in two front ends that share the same business logic: `clean`, with semantic HTML and native controls, and `legacy`, which is what many real booking sites ship (clickable `<div>` elements, a custom date picker, content loaded late from undocumented endpoints). Chapter 2 uses both to show the difference.
 
-Each chapter adds one folder under `nordlys-cabins/layers/`, named after its chapter number, with tests named after the chapter (`tests/ch19-*.test.js`, for example). A layer is enabled for every `--upto` value at or above its number, so you can run the site as it stands after any chapter.
+Layers live in folders under `nordlys-cabins/layers/`, with tests in `tests/`. A layer is enabled for every `--upto` value at or above its number, so you can run the site at any stage. The folder numbers come from the first edition of this book, which had 20 chapters, and the demos keep them so that every command in the repository still works. Table 0.1 maps the chapters of this edition to the layers and standalone demos they use.
 
-**Standalone demos** (`chapters/<chapter>/`) are small, separate projects for chapters that need a tool of their own, such as the log classifier in Chapter 19 or the standards watcher in Chapter 20. Most of them have no dependencies.
+Table 0.1 The chapters of this edition and their demos
+
+| Chapter | Layer folders (`nordlys-cabins/layers/`) | Standalone demos (`chapters/`) |
+| --- | --- | --- |
+| 1 | none | none |
+| 2 | `02-first-steps` | `02-your-first-agent-ready-page`, `19-measuring-agent-traffic` (a first log run) |
+| 3 | `03-perception` | `03-how-agents-see-a-page` |
+| 4 | `04-crawler-controls`, `15-bot-identity` | `15-signing-agent` |
+| 5 | `05-structured-data`, `06-agent-content` | none |
+| 6 | none | `13-choosing-the-right-agent-interface` |
+| 7 | `10-tool-design` | `10-designing-tools-agents-can-use` |
+| 8 | `07-public-api`, `08-mcp-server`, `11-discovery` | none |
+| 9 | `09-webmcp` | none |
+| 10 | `16-security` | `16-security-for-agent-facing-sites` |
+| 11 | `14-oauth`, `17-consent`, `12-commerce` | `14-connect-an-agent` |
+| 12 | `19-agent-analytics`, `20-versioning` | `18-testing-agent-readiness`, `19-measuring-agent-traffic`, `20-evolving-with-the-standards` |
+| Appendix B | none | `appendix-b-reference` |
+
+Because `--upto=N` turns on every layer up to N, a high number also turns on layers that this edition introduces later, for example `--upto=15` for the bot identity layer of Chapter 4.
+
+**Standalone demos** (`chapters/<chapter>/`) are small, separate projects for chapters that need a tool of their own, such as the log classifier in Chapter 12 or the decision helper in Chapter 6. Most of them have no dependencies.
 
 To run Nordlys Cabins, you need Node.js 24 or later (Node.js 26, the current LTS line, is what the demos' continuous integration uses for browser tests):
 
@@ -107,13 +123,7 @@ The book was written and tested in November 2026. These are the main versions:
 | schema.org | 30.1 |
 | Web Bot Auth | `draft-ietf-webbotauth-httpsig-protocol-01` |
 
-Chapters that use other packages name their versions where they use them. Chapter 20 explains how to find out what changed since.
-
-## How the book measures its own web edition
-
-A book about agent-ready websites should have one, so the web edition of this book follows its own advice. It publishes semantic HTML, a Markdown version of every page, an llms.txt, a robots.txt with Content Signals, structured data, an Agent Skill for reading and citing the book, and three WebMCP tools for searching and reading it. All of it is generated from the same manuscript as the printed book.
-
-The web edition is measured with the same two graders as Nordlys Cabins. On 2 November 2026, before its first public deployment, six page types scored 1.00 in Lighthouse's Agentic Browsing category in a local test run, and the isitagentready.com checks it passes, skips and does not need are explained in Chapter 20, together with why it skips one of them. The live scores will be on the book's site once it is deployed.
+Chapters that use other packages name their versions where they use them. Chapter 12 and Appendix B explain how to keep track of what changes.
 
 ## Errata and feedback
 

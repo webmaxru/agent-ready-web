@@ -1,5 +1,5 @@
 {
-  "title": "The Agent-Ready Web",
+  "title": "Agent-Ready Websites in Action",
   "subtitle": "How to make your website work for AI agents, layer by layer",
   "author": "Maxim Salnikov",
   "author_url": "https://github.com/webmaxru",
@@ -8,8 +8,8 @@
     "https://www.linkedin.com/in/webmax/"
   ],
   "year": "2026",
-  "version": "1.0.0",
-  "edition": "First edition, November 2026",
+  "version": "2.0.0",
+  "edition": "Second edition, November 2026",
   "checked_as_of": "November 2026",
   "tested_with": "Standards, specifications and tools checked as of {checked_as_of}",
   "language": "en",
@@ -32,8 +32,8 @@
   },
   "newsletter_url": "https://isainative.substack.com/subscribe",
   "contact_url": "https://www.linkedin.com/in/webmax/",
-  "file_stem": "The-Agent-Ready-Web-Maxim-Salnikov",
-  "html_zip_stem": "The-Agent-Ready-Web-HTML",
+  "file_stem": "Agent-Ready-Websites-in-Action-Maxim-Salnikov",
+  "html_zip_stem": "Agent-Ready-Websites-in-Action-HTML",
   "agent_ready": {
     "content_signal": "search=yes, ai-input=yes, ai-train=no",
     "training_crawlers": "follow-content-signal",
