@@ -397,7 +397,7 @@ def write_releases(cfg, secs, out, site, rels):
         nav.append((vid, ver))
         md_body = re.sub(r"\]\((?!https?:|#|mailto:)([^)]+)\)", "](#)", body)  # repo-relative links make no sense here
         md_body = re.sub(r"\[([^\]]+)\]\(#\)", r"\1", md_body)
-        state = '<span class="pin-tag">this edition</span>' if ver == current else ""
+        state = '<span class="pin-tag">current</span>' if ver == current else ""
         date_txt = esc(date) if date else ""
         parts.append(f'<h2 id="{vid}">Version {esc(ver)}</h2><p class="release-assets"><span class="pin-tag">{date_txt}</span>{state}</p>'
                      + bookmd.render_markdown(md_body))

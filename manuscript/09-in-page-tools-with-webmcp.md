@@ -382,7 +382,7 @@ Two lessons hide in this table. First, the category score doesn't reward coverag
 
 ### isitagentready: a check that doesn't count
 
-isitagentready.com loads your page in a headless browser and has a `webMcp` check. It passes when the page registers a tool with `document.modelContext.registerTool()` or has a form with `toolname` and `tooldescription`.[^ch09-21] By that definition Nordlys passes from Chapter 2 onwards, thanks to the declarative availability form (I couldn't run the public scanner against a local server, so this one is reasoning rather than a scan). The check doesn't affect the scanner's level at all, and the headless check can time out on heavy pages. So treat a WebMCP pass on isitagentready as a smoke test, and use Lighthouse and your own tests for the details.
+isitagentready.com loads your page in a headless browser and has a `webMcp` check. It passes when the page registers a tool with `document.modelContext.registerTool()` or has a form with `toolname` and `tooldescription`.[^ch09-21] By that definition, the declarative availability form that Nordlys has from Chapter 2 onwards is enough for the check. That is a reading of the check's rule, not a scan, because the public scanner can't reach a local server. The check doesn't affect the scanner's level at all, and the headless check can time out on heavy pages. So treat a WebMCP pass on isitagentready as a smoke test, and use Lighthouse and your own tests for the details.
 
 ## Revisiting the Chapter 6 decision for Nordlys
 

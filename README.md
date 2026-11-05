@@ -1,6 +1,6 @@
 # Agent-Ready Websites in Action
 
-This repository holds the manuscript of *Agent-Ready Websites in Action: How to make your website work for AI agents, layer by layer* by Maxim Salnikov (second edition, version 2.0.0, 12 chapters in three parts; the first edition, *The Agent-Ready Web* v1.0.0 with 20 chapters, is tagged `v1.0.0`), together with its figure sources, editorial records, theme, build tools and hosting setup. The runnable demos, including the running example Nordlys Cabins, live in the companion repository [webmaxru/agent-ready-web-demos](https://github.com/webmaxru/agent-ready-web-demos). The web edition is hosted on Azure Static Web Apps at https://agent-ready-web.salnikov.no once deployed (see [`DEPLOY.md`](DEPLOY.md)).
+This repository holds the manuscript of *Agent-Ready Websites in Action: How to make your website work for AI agents, layer by layer* by Maxim Salnikov (version 2.0.0, 12 chapters in three parts), together with its figure sources, editorial records, theme, build tools and hosting setup. The runnable demos, including the running example Nordlys Cabins, live in the companion repository [webmaxru/agent-ready-web-demos](https://github.com/webmaxru/agent-ready-web-demos). The web edition is hosted on Azure Static Web Apps at https://agent-ready-web.salnikov.no once deployed (see [`DEPLOY.md`](DEPLOY.md)).
 
 The book develops the ideas of the author's earlier book, *Tools, Not Clicks: Building Agent-Ready Websites with WebMCP* ([webmcp.salnikov.no](https://webmcp.salnikov.no)), into the whole field of agent-readiness, and this repository uses the same layout and build.
 
@@ -60,10 +60,10 @@ python3 tools/serve.py                      # preview dist/site on http://localh
 | Command | Output |
 | --- | --- |
 | `python3 tools/build.py site` | `dist/site/`: the web edition (home page, one page per part, chapter and appendix, About, Release history, search, 404) and its agent-ready layer (a Markdown twin of every page, `llms.txt`, `llms-full.txt`, `robots.txt` with Content Signals, `sitemap.xml`, `releases.xml`, JSON-LD, `.well-known/` files, WebMCP tools; see [`AGENT-READY.md`](AGENT-READY.md)) |
-| `python3 tools/build.py zip` | `dist/The-Agent-Ready-Web-HTML-v<version>.zip`: the web edition for offline reading |
-| `python3 tools/build.py epub` | `dist/The-Agent-Ready-Web-Maxim-Salnikov-v<version>.epub` |
-| `python3 tools/build.py pdf` | `dist/The-Agent-Ready-Web-Maxim-Salnikov-v<version>.pdf`: 7 × 9.25 in, for reading and Leanpub |
-| `python3 tools/build.py print` | `dist/The-Agent-Ready-Web-Maxim-Salnikov-v<version>-print-7.5x9.25.pdf`: the KDP paperback interior, 7.5 × 9.25 in, same text block |
+| `python3 tools/build.py zip` | `dist/Agent-Ready-Websites-in-Action-HTML-v<version>.zip`: the web edition for offline reading |
+| `python3 tools/build.py epub` | `dist/Agent-Ready-Websites-in-Action-Maxim-Salnikov-v<version>.epub` |
+| `python3 tools/build.py pdf` | `dist/Agent-Ready-Websites-in-Action-Maxim-Salnikov-v<version>.pdf`: 7 × 9.25 in, for reading and Leanpub |
+| `python3 tools/build.py print` | `dist/Agent-Ready-Websites-in-Action-Maxim-Salnikov-v<version>-print-7.5x9.25.pdf`: the KDP paperback interior, 7.5 × 9.25 in, same text block |
 
 Any command takes `--manuscript DIR` to build another manuscript folder, for example the fixture: `python3 tools/build.py --manuscript tools/fixtures/manuscript`. The PDF builds use Playwright's Chromium, or the browser in `CHROME_PATH`.
 

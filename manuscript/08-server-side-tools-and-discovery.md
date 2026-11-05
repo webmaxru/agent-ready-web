@@ -12,7 +12,7 @@ An agent that can read every cabin page on Nordlys Cabins still cannot book anyt
 
 We start with the oldest door, a plain HTTP API. Most of the newer interfaces stand on top of it. The MCP server in the middle of this chapter calls the same functions, and the gateways from Microsoft and AWS that turn existing services into MCP tools read OpenAPI files. The last third of the chapter publishes the small files at predictable addresses that let a machine find all of it from nothing but the domain name.
 
-> **Note:** Product managers and architects, the first section and the opening of each part are for you. The code sections are marked with a Hands-on callout. The demos keep the first edition's layer numbers: this chapter uses the layers `07-public-api`, `08-mcp-server` and `11-discovery`, and the table in About this book maps them to the chapters of this edition.
+> **Note:** Product managers and architects, the first section and the opening of each part are for you. The code sections are marked with a Hands-on callout. This chapter builds three layers in the demo app: `08-public-api`, `08-mcp-server` and `08-discovery`.
 
 ## When a plain API is enough
 
@@ -50,7 +50,7 @@ The description uses OpenAPI 3.1.2. Version 3.2.0 was published on 19 September 
 
 When a platform imports an OpenAPI file, each operation becomes a tool. The `operationId` becomes the tool name, the `summary` and `description` become the tool description, and the parameters and request body become the input schema. Chapter 7's craft applies directly: an `operationId` on every operation, written as a verb and a noun, a one-line `summary`, a `description` that says when to use the operation and what to do before it, enumerations wherever the set of values is known, and a description on every non-obvious field. Listing 8.1 shows the booking operation.
 
-**Listing 8.1** `nordlys-cabins/layers/07-public-api/openapi.js` — the createBooking operation (excerpt)
+**Listing 8.1** `nordlys-cabins/layers/08-public-api/openapi.js` — the createBooking operation (excerpt)
 
 ```js
       '/bookings': {
@@ -269,7 +269,7 @@ The tools, resources and prompts come from a registry that later layers extend w
       const ownHost = new URL(ctx.absoluteUrl(c, '/')).hostname;
       const rejected = originValidationResponse(c.req.raw, [ownHost, new URL(c.req.url).hostname]);
       if (rejected) return rejected;
-      // A later layer (Chapter 14) verifies a bearer token and stores the result
+      // A later layer (Chapter 11) verifies a bearer token and stores the result
       // with c.set('mcpAuth', authInfo). Until then every caller is anonymous.
       return handler.fetch(c.req.raw, { authInfo: c.get('mcpAuth') ?? undefined });
     });
@@ -302,7 +302,7 @@ The server also offers two resources (the guide articles and the cancellation po
 
 ### Testing with a real client
 
-Unit tests that call tool handlers directly prove very little about MCP. The SDK's client can use a custom `fetch`, and our app has a `fetch` function too, so the tests connect the two in-process, with no network and no port. The seven tests in `nordlys-cabins/tests/ch08-mcp-server.test.js` check that a 2026-07-28 client discovers four tools with honest annotations in a stable order, that results carry `structuredContent` and errors carry their codes, that `create_booking` is idempotent and books through the same service as the API, that a 2025-11-25 client with the old `initialize` handshake is served from the same endpoint, and that a page from another origin cannot call `/mcp`.[^ch08-26]
+Unit tests that call tool handlers directly prove very little about MCP. The SDK's client can use a custom `fetch`, and our app has a `fetch` function too, so the tests connect the two in-process, with no network and no port. The seven tests in `nordlys-cabins/tests/ch08-mcp-server.test.js` check that a 2026-07-28 client discovers this chapter's four tools with honest annotations in a stable order, followed by `find_booking` from Chapter 7, that results carry `structuredContent` and errors carry their codes, that `create_booking` is idempotent and books through the same service as the API, that a 2025-11-25 client with the old `initialize` handshake is served from the same endpoint, and that a page from another origin cannot call `/mcp`.[^ch08-26]
 
 For exploring a server by hand, the MCP project maintains MCP Inspector. Version 2.13.0 (28 October 2026) needs Node 22.19 or newer and has a web UI, a CLI and a terminal UI.[^ch08-27] With the demo running, this calls one tool and prints the same total of 7,900 NOK that the API returned:
 
@@ -355,11 +355,11 @@ RFC 9727 (June 2025) defines a well-known URI and a link relation, both named `a
 
 > **Hands-on:** Listing 8.4 is the catalog module. If you don't write code, the catalog is a small JSON file with four links per API, and the home page gets one header that points to it. Pick up again at "MCP server cards".
 
-**Listing 8.4** `nordlys-cabins/layers/07-public-api/catalog.js` — The API catalog document
+**Listing 8.4** `nordlys-cabins/layers/08-public-api/catalog.js` — The API catalog document
 
 ```js
 // The API catalog document (RFC 9727): a Linkset that lists the site's APIs.
-// Chapter 7 publishes it for the public API, Chapter 11 adds the MCP server.
+// Chapter 8 publishes it for the public API, Chapter 8 adds the MCP server.
 
 export const CATALOG_PATH = '/.well-known/api-catalog';
 export const LINKSET_TYPE = 'application/linkset+json; profile="https://www.rfc-editor.org/info/rfc9727"';
@@ -389,7 +389,7 @@ The confusing part is the address. In November 2026, three are in circulation. `
 
 > **Still in flux:** On 2 November 2026 the SEP-2127 page showed the status "Final", while the extension's own repository said "Status: Experimental. This work is for prototyping and feedback only".[^ch08-41] Treat the server card as a useful convention with a likely future, and keep the code that produces it small.
 
-**Listing 8.5** `nordlys-cabins/layers/11-discovery/index.js` — the MCP server card at two addresses (excerpt)
+**Listing 8.5** `nordlys-cabins/layers/08-discovery/index.js` — the MCP server card at two addresses (excerpt)
 
 ```javascript
     // 1. MCP Server Card (MCP Server Card extension, SEP-2127): at <mcp-url>/server-card,
@@ -418,7 +418,7 @@ An MCP client that wants to call a protected tool on a user's behalf needs to kn
 
 The server card tells an agent *where* the MCP server is. It does not tell the agent *how to use it well*: ask for the dates before searching, show the total before booking, never accept the terms on the user's behalf, retry with the same idempotency key. A procedure that spans several tools does not fit into any single tool description. A skill is a folder with a `SKILL.md` file: YAML front matter with a `name` (up to 64 characters) and a `description` (up to 1,024 characters that say "what the skill does and when to use it"), followed by Markdown instructions.[^ch08-43] An agent keeps only the names and descriptions in mind and loads the full instructions when a task matches. Listing 8.6 is the whole skill Nordlys publishes. Please read it as a product manager or a support lead would: it is the booking policy and the booking flow, in plain language.
 
-**Listing 8.6** `nordlys-cabins/layers/11-discovery/skills/book-a-nordlys-cabin/SKILL.md` — the booking skill
+**Listing 8.6** `nordlys-cabins/layers/08-discovery/skills/book-a-nordlys-cabin/SKILL.md` — the booking skill
 
 ```markdown
 ---
@@ -474,7 +474,7 @@ For a site owner, writing representative queries is a familiar job: keyword rese
 
 > **Hands-on:** Listing 8.7 builds the Nordlys manifest. If you skip the code, look at the representative queries in it: they are the part a content or SEO person should write. Pick up again at "What the graders see".
 
-**Listing 8.7** `nordlys-cabins/layers/11-discovery/index.js` — the ARD manifest (excerpt)
+**Listing 8.7** `nordlys-cabins/layers/08-discovery/index.js` — the ARD manifest (excerpt)
 
 ```javascript
     // 3. ARD manifest (Agentic Resource Discovery v0.91) at /.well-known/ard.json.

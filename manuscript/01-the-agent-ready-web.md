@@ -225,7 +225,7 @@ npm start -- --upto=6                       # the site as it is after Chapter 6
 npm run start:baseline -w nordlys-cabins    # legacy front end, no layers: the Chapter 2 baseline
 ```
 
-The demos keep the first edition's layer numbers, so `--upto=6` means "every layer up to and including layer 6", which in this edition is the end of Chapter 5. The table in "About this book" maps each chapter of this edition to its layer folders.
+Layer folders are numbered by chapter, so `--upto=6` means "every layer of Chapters 1 to 6". Chapter 6 adds no layer of its own, so this is the site at the end of Chapter 5. The table in "About this book" lists each chapter's layer folders.
 
 ## Deciding how far to go
 

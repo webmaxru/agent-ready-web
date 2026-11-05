@@ -14,7 +14,7 @@ Here's the moment that made the question real for me. While building the eval ha
 
 A tool definition is the only documentation a model reads before it acts. It has no onboarding, no Slack channel, no colleague to ask. In this chapter, we'll go through the parts of a tool one by one (name, description, input schema, result, error), then the questions that cross several tools (granularity, retries, stale state, confirmations, versions), then a first threat model, and at the end we'll measure the difference with real models. Everything applies to MCP tools, WebMCP tools and API operations alike, because they all reach the model in the same shape.
 
-> **Note:** The layer `10-tool-design` adds one MCP tool and a lint audit on top of the API, MCP and WebMCP layers of Chapters 8 and 9, and the eval harness lives in `chapters/10-designing-tools-agents-can-use/` of the demos repository.[^ch07-1] The demos keep the first edition's layer numbers (see the table in About this book).
+> **Note:** The layer `07-tool-design` adds one MCP tool, `find_booking`, and a lint audit for the MCP server of Chapter 8, and both appear once the Chapter 8 MCP server is on, from `--upto=8`. With `--upto=7` the site looks the same as at the end of Chapter 5. The eval harness lives in `chapters/07-designing-tools-agents-can-use/` of the demos repository.[^ch07-1]
 
 ## What the model sees
 
@@ -43,7 +43,7 @@ The "before" set is what you get when you convert every operation of the Nordlys
 
 The "after" set holds the same five operations as the Nordlys MCP server: `search_cabins`, `check_availability`, `create_booking` and `cancel_booking`, which Chapter 8 builds, plus `find_booking`, which this chapter adds. They're written as plain JSON Schema, so that any model API takes them, with the fixes from this chapter applied. Listing 7.1 is the same availability check.
 
-**Listing 7.1** `chapters/10-designing-tools-agents-can-use/toolsets/after.mjs` (excerpt) — The same operation in the "after" set: a name with a verb, a description that says when to call it, described and typed parameters
+**Listing 7.1** `chapters/07-designing-tools-agents-can-use/toolsets/after.mjs` (excerpt) — The same operation in the "after" set: a name with a verb, a description that says when to call it, described and typed parameters
 
 ```js
   {
@@ -122,7 +122,7 @@ The schema is the easy part. What to put in the result is the design work, and t
 
 **Return what the user needs to hear, in words.** In the first version of my "after" set, `create_booking` returned the booking as JSON, just like the API. The models booked correctly and then, now and then, told the guest "Your booking is confirmed!" without the reference. A guest without a reference can't find, change or cancel the booking. Listing 7.2 is the result I ended up with, modelled on the Nordlys MCP server: one sentence saying what happened and what to tell the guest, then the data.
 
-**Listing 7.2** `chapters/10-designing-tools-agents-can-use/toolsets/after.mjs` (excerpt) — The create_booking result: a sentence for the model, then the data
+**Listing 7.2** `chapters/07-designing-tools-agents-can-use/toolsets/after.mjs` (excerpt) — The create_booking result: a sentence for the model, then the data
 
 ```js
       // Say what happened in words, and what the guest needs to hear, then the data.
@@ -134,7 +134,7 @@ The schema is the easy part. What to put in the result is the design work, and t
 
 **Never return an empty answer without a reason.** This one I learned the hard way, and it's the best example in this chapter of why you need an eval. When a guest asked "Can six of us stay at Lyngen Lysthus from 1 to 4 March?", some models searched for cabins in Lyngen for six guests on those dates, got `{"count": 0, "cabins": []}`, and told the guest "I couldn't find anything". True, and useless. The real answer is "Lyngen Lysthus sleeps four." My first fix was a hint in the result: "No cabin matches every filter. Search again with fewer filters to tell the user which one rules the cabins out." It made things worse. One model went from four passes out of five to zero, because instead of searching again, it now *offered* the guest to search again. So I stopped asking the model to do work the tool can do, and made the tool explain itself. Listing 7.3 is the second fix.
 
-**Listing 7.3** `chapters/10-designing-tools-agents-can-use/toolsets/after.mjs` (excerpt) — An empty search explains itself: the closest cabins and what rules each one out
+**Listing 7.3** `chapters/07-designing-tools-agents-can-use/toolsets/after.mjs` (excerpt) — An empty search explains itself: the closest cabins and what rules each one out
 
 ```js
 /** For an empty search: the cabins that came closest, and what rules each one out. */
@@ -193,7 +193,7 @@ For Nordlys, I ended up with three rules:
 2. **Combine steps that are never separate.** The API has separate endpoints for the cabin details and its unavailable dates, but no guest wants one without the other. In the "after" set, the availability answer already includes the conflicts and the full price breakdown.
 3. **Add the read tool that every write tool needs.** This one surprised me. The MCP server layer has `cancel_booking` but no way to *look at* a booking. An agent asked "How much would I get back if I cancel?" had two options: guess from the policy, or cancel and read the refund in the result. With the "before" set, which has the same gap, every model in the eval failed that task in all twenty runs, and in 11 of them the model simply cancelled the booking to find out. That's how the `find_booking` tool came into the Nordlys MCP server in this chapter's layer. Listing 7.4 shows it.
 
-**Listing 7.4** `nordlys-cabins/layers/10-tool-design/index.js` (excerpt) — find_booking: the read tool that cancel_booking was missing
+**Listing 7.4** `nordlys-cabins/layers/07-tool-design/index.js` (excerpt) — find_booking: the read tool that cancel_booking was missing
 
 ```js
     registerMcpTool(
@@ -277,9 +277,9 @@ A tool name is an API contract with something that can't read your changelog. Ag
 
 > **Hands-on:** This section and the next one show code: a linter for tool definitions and the eval harness. Product managers and content writers can skip to "What the eval showed" and read the results.
 
-Most of this chapter's advice can be checked by a machine before any model sees your tools. So the layer for this chapter, `10-tool-design`, adds a small linter that reads tools in the shape every interface shares (name, description, input schema, annotations). It works on an MCP `tools/list` answer, on a WebMCP `getTools()` dump and on OpenAPI operations converted to tools. Listing 7.5 shows the per-tool rules.
+Most of this chapter's advice can be checked by a machine before any model sees your tools. So the layer for this chapter, `07-tool-design`, adds a small linter that reads tools in the shape every interface shares (name, description, input schema, annotations). It works on an MCP `tools/list` answer, on a WebMCP `getTools()` dump and on OpenAPI operations converted to tools. Listing 7.5 shows the per-tool rules.
 
-**Listing 7.5** `nordlys-cabins/layers/10-tool-design/lint.js` (excerpt) — The per-tool rules of the linter: errors change what an agent does, warnings make it slower or less reliable
+**Listing 7.5** `nordlys-cabins/layers/07-tool-design/lint.js` (excerpt) — The per-tool rules of the linter: errors change what an agent does, warnings make it slower or less reliable
 
 ```js
 export function lintTool(tool) {
@@ -317,7 +317,7 @@ export function lintTool(tool) {
 The layer also registers an audit that calls the site's own `/mcp` endpoint, asks for `tools/list` and lints the answer, so `npm test` and `GET /__audit` catch a tool that loses its description in a refactoring. On the Nordlys site with this layer, the audit reports "5 tools, 0 errors" and four warnings, the undescribed parameters of the Chapter 8 tools that I mentioned earlier. The harness has a command-line version too:
 
 ```sh
-cd chapters/10-designing-tools-agents-can-use
+cd chapters/07-designing-tools-agents-can-use
 node lint.mjs                 # both tool sets of the harness
 node lint.mjs tools.json      # a saved tools/list answer or getTools() dump
 ```
@@ -326,14 +326,14 @@ On the "before" set it finds 8 errors and 20 warnings, and on the "after" set no
 
 ## A small eval harness
 
-Chrome's WebMCP guidance calls the method evaluation-driven development: define the task, a baseline and an ideal result, decide how to judge outputs, and improve in small steps, "catching regressions" along the way.[^ch07-4] Anthropic's guide describes the same loop and suggests tracking more than accuracy: "the total number of tool calls, the total token consumption, and tool errors."[^ch07-5] The harness in `chapters/10-designing-tools-agents-can-use/` is the smallest version of that loop I could build. It has four parts:
+Chrome's WebMCP guidance calls the method evaluation-driven development: define the task, a baseline and an ideal result, decide how to judge outputs, and improve in small steps, "catching regressions" along the way.[^ch07-4] Anthropic's guide describes the same loop and suggests tracking more than accuracy: "the total number of tool calls, the total token consumption, and tool errors."[^ch07-5] The harness in `chapters/07-designing-tools-agents-can-use/` is the smallest version of that loop I could build. It has four parts:
 
 - **A backend per episode.** Every run gets a fresh copy of the real Nordlys store and booking service (the same code as the site), with the clock frozen at 10 November 2026.
 - **Two tool sets.** `before.mjs` and `after.mjs`. Each tool calls the booking service and carries an `intent` (search, availability, create, lookup, cancel), so that one check works for both sets.
 - **Eleven tasks.** Each is one message from a guest and a check. Listing 7.6 shows three of them.
 - **A loop.** It sends the system prompt, the tools and the guest's message to a model, runs every tool call, sends the results back and stops when the model answers in plain text (or after eight steps).
 
-**Listing 7.6** `chapters/10-designing-tools-agents-can-use/tasks.mjs` (excerpt) — Three tasks with deterministic checks: a booking that needs confirmation, one that doesn't, and a retry after a timeout
+**Listing 7.6** `chapters/07-designing-tools-agents-can-use/tasks.mjs` (excerpt) — Three tasks with deterministic checks: a booking that needs confirmation, one that doesn't, and a retry after a timeout
 
 ```js
   {
@@ -376,7 +376,7 @@ The checks are deterministic on purpose. No model grades another model here. A c
 You run it like this:
 
 ```sh
-cd chapters/10-designing-tools-agents-can-use
+cd chapters/07-designing-tools-agents-can-use
 npm test                                   # the harness itself, with a scripted mock model
 OPENAI_API_KEY=... ANTHROPIC_API_KEY=... \
   node eval.mjs --models gpt-4.1-mini,claude-haiku-4-5-20251001 --sets before,after --trials 5
@@ -386,7 +386,7 @@ Each run writes a JSON file with every call, argument, result and answer, and a 
 
 ## What the eval showed
 
-I ran the eleven tasks five times each, with both tool sets, against four small models: `gpt-4.1-mini` and `gpt-5.4-mini` from OpenAI and `claude-haiku-4-5` and `claude-haiku-5-5` from Anthropic, as the APIs reported them (`gpt-4.1-mini-2025-04-14`, `gpt-5.4-mini-2026-03-17`, `claude-haiku-4-5-20251001`, `claude-haiku-5-5`). Small models are what most production agents use for tool calls because they're fast and cheap, and they show the difference between good and bad tools more clearly than the big ones. All runs used each API's default temperature and the same short system prompt. Table 7.1 compares the "before" set from the main run with the final "after" set.
+I ran the eleven tasks five times each, with both tool sets, against four small models: `gpt-4.1-mini` and `gpt-5.4-mini` from OpenAI and `claude-haiku-4-5` and `claude-haiku-5-5` from Anthropic, as the APIs reported them (`gpt-4.1-mini-2025-04-14`, `gpt-5.4-mini-2026-03-17`, `claude-haiku-4-5-20251001`, `claude-haiku-5-5`). I chose small models because they're fast and cheap to run many times over. All runs used each API's default temperature and the same short system prompt. Table 7.1 compares the "before" set from the main run with the final "after" set.
 
 **Table 7.1** Tasks passed out of 55 (11 tasks, 5 runs each), 2 November 2026
 
@@ -442,11 +442,10 @@ Bottomline: a description asks, the handler decides. In the eval, the descriptio
 - Results should say what the user needs to hear and return the numbers the tool already knows. An empty result needs a reason. Errors need a code, a readable message and the next step.
 - Design granularity around the guest's decisions, add the read tool that every write tool needs, and make writes idempotent with a key the agent repeats on retry.
 - Recompute state at commit, annotate honestly, and don't rely on descriptions for consequential actions. In the eval, a description stopped most models, but not all.
-- Measure with an eval: a fresh backend per episode, deterministic checks, real models, and failures read by a human. In ours, the redesigned tools raised four small models from 18–45 to 52–55 passed tasks out of 55, and the failures that remained showed where the server and the person must take over.
 - Measure with a lint and an eval: a fresh backend per episode, deterministic checks, real models, and failures read by a human. In ours, the redesigned tools raised four small models from 18–45 to 52–55 passed tasks out of 55, and the failures that remained showed where the server and the person must take over.
 - Start every tool with a threat model: no single tool should combine untrusted input, personal data and a state change, and authorization lives in the handler, not in the description.
 
-[^ch07-1]: The layer `nordlys-cabins/layers/10-tool-design/` and the harness `chapters/10-designing-tools-agents-can-use/` (results in `results/`), webmaxru/agent-ready-web-demos, GitHub, https://github.com/webmaxru/agent-ready-web-demos (retrieved November 2026).
+[^ch07-1]: The layer `nordlys-cabins/layers/07-tool-design/` and the harness `chapters/07-designing-tools-agents-can-use/` (results in `results/`), webmaxru/agent-ready-web-demos, GitHub, https://github.com/webmaxru/agent-ready-web-demos (retrieved November 2026).
 [^ch07-2]: "Tools", Model Context Protocol specification, revision 2026-07-28, https://modelcontextprotocol.io/specification/2026-07-28/server/tools (retrieved November 2026). Sections "Tool Names", "Structured Content", "Error Handling" and the security considerations on annotations and the human in the loop.
 [^ch07-3]: "Extend your agent with tools from a REST API (preview)", Microsoft Copilot Studio documentation, https://learn.microsoft.com/en-us/microsoft-copilot-studio/agent-extend-action-rest-api, and "Amazon Bedrock AgentCore Gateway: A secure AI gateway for agents, tools, and models", AWS documentation, https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway.html (retrieved November 2026).
 [^ch07-4]: "WebMCP best practices", Chrome for Developers, last updated 30 October 2026, https://developer.chrome.com/docs/ai/webmcp/best-practices (retrieved November 2026). Sections on tool names and descriptions, "Validate strictly in code, loosely in schema", stale work at confirmation and "Eval testing and debugging".

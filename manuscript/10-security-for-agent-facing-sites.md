@@ -104,11 +104,11 @@ Figure 10.2 places the Nordlys tools in the three circles.
 
 ![Figure 10.2 — The Rule of Two applied to the Nordlys MCP tools. get_cabin_reviews carries untrusted text and nothing else. get_booking touches personal data without changing anything. create_booking, cancel_booking and request_booking change state and touch personal data, so they must never carry untrusted text. The centre, where all three meet, stays empty.](images/figure-10-2.png)
 
-> **Hands-on:** The rest of this section and the next three build the security layer `layers/16-security/` and its tests. If you don't write code, here is what they achieve: one table records the risk of every tool, guest text is cleaned in one place before any channel shows it, booking data goes only to its owner, every tool call is logged, and a test fails when a tool description changes without review. Pick up again at "Logging what agents do".
+> **Hands-on:** The rest of this section and the next three build the security layer `layers/10-security/` and its tests. If you don't write code, here is what they achieve: one table records the risk of every tool, guest text is cleaned in one place before any channel shows it, booking data goes only to its owner, every tool call is logged, and a test fails when a tool description changes without review. Pick up again at "Logging what agents do".
 
 The policy table is the first file of the layer. It records the three properties for every MCP tool Nordlys publishes, who may call it, and what confirmation it needs.
 
-**Listing 10.1** `nordlys-cabins/layers/16-security/policy.js` — the tool policy table
+**Listing 10.1** `nordlys-cabins/layers/10-security/policy.js` — the tool policy table
 
 ```js
 // The security policy of every MCP tool Nordlys publishes, in one table.
@@ -147,7 +147,7 @@ export function ruleOfTwoViolations(policy = TOOL_POLICY) {
 
 Let's go back to the carrier problem and make it concrete. Where can an instruction hide in a page? I wrote a small fixture page for this chapter, a copy of a cabin page with one hostile guest review, and hid instructions in it seven different ways. Here is the review.
 
-**Listing 10.2** `chapters/16-security-for-agent-facing-sites/fixtures/cabin-hostile.html` — one guest review, seven hiding places (excerpt)
+**Listing 10.2** `chapters/10-security-for-agent-facing-sites/fixtures/cabin-hostile.html` — one guest review, seven hiding places (excerpt)
 
 ```html
       <article>
@@ -172,7 +172,7 @@ On screen, a person sees "Lovely cabin, great sauna!" and "Would come again." Th
 
 To see them the way agents do, the chapter's demo includes a scanner. It loads a page in Chromium with Playwright, walks every text node, comment, `alt` attribute and JSON-LD string, records whether a person can see it, and runs the same heuristics the security layer uses. Here is its report on the hostile fixture.
 
-**Listing 10.3** Output of `node scan-page.mjs fixtures/cabin-hostile.html` (in `chapters/16-security-for-agent-facing-sites/`)
+**Listing 10.3** Output of `node scan-page.mjs fixtures/cabin-hostile.html` (in `chapters/10-security-for-agent-facing-sites/`)
 
 ```text
 7 finding(s) on fixtures/cabin-hostile.html
@@ -205,7 +205,7 @@ Nordlys shows reviews in five places by now: the cabin page, the JSON-LD and the
 
 The cleaning function itself is short. It normalises the text, removes characters that render as nothing, and removes markup and links.
 
-**Listing 10.4** `nordlys-cabins/layers/16-security/untrusted.js` — cleaning untrusted text (excerpt)
+**Listing 10.4** `nordlys-cabins/layers/10-security/untrusted.js` — cleaning untrusted text (excerpt)
 
 ```js
 // Characters that render as nothing (or reorder what you see) but still reach a model:
@@ -234,7 +234,7 @@ Next to cleaning, the module has a second function, `injectionSignals()`, with a
 
 Reviews pass this boundary in `reviews.js`. New reviews land in an inbox, where anything suspicious waits for a person, and the store function every channel calls returns only cleaned text.
 
-**Listing 10.5** `nordlys-cabins/layers/16-security/reviews.js` — the review inbox and the one boundary (excerpt)
+**Listing 10.5** `nordlys-cabins/layers/10-security/reviews.js` — the review inbox and the one boundary (excerpt)
 
 ```js
 /** The review inbox of one app. The demo has no review form, so tests submit here. */
@@ -315,7 +315,7 @@ The security layer adds a `get_booking` tool, because a guest asking an assistan
 
 Here is the authorization and the projection.
 
-**Listing 10.7** `nordlys-cabins/layers/16-security/access.js` — who may read a booking, and what they see (excerpt)
+**Listing 10.7** `nordlys-cabins/layers/10-security/access.js` — who may read a booking, and what they see (excerpt)
 
 ```js
 /** Who may read this booking: the signed-in member who made it, or someone who knows ref + email. */
@@ -369,7 +369,7 @@ Nordlys is not malicious, of course. Why should it care? Because the same thing 
 
 The first is a gateway in front of `/mcp` that refuses any tool without an entry in the policy table from Listing 10.1. It runs as middleware, after Chapter 11 has verified the caller, and before the MCP handler.
 
-**Listing 10.8** `nordlys-cabins/layers/16-security/gateway.js` — a policy gateway in front of /mcp (excerpt)
+**Listing 10.8** `nordlys-cabins/layers/10-security/gateway.js` — a policy gateway in front of /mcp (excerpt)
 
 ```js
 export function mcpGateway(ctx, { policy = TOOL_POLICY } = {}) {
@@ -410,7 +410,7 @@ The gateway decides on the request body, because the body is what the server wil
 
 The second mechanism handles the rug pull. The layer computes a fingerprint (a short SHA-256 hash) of everything a client sees about each tool: name, title, description, input and output schema, and annotations. The fingerprints are committed in `tools.lock.json`. An audit compares the live `tools/list` with the lockfile on every test run.
 
-**Listing 10.9** `nordlys-cabins/layers/16-security/pins.js` — fingerprints of what agents read (excerpt)
+**Listing 10.9** `nordlys-cabins/layers/10-security/pins.js` — fingerprints of what agents read (excerpt)
 
 ```js
 /** What a client sees in tools/list, reduced to the parts that steer a model. */
@@ -425,7 +425,7 @@ export function toolFingerprints(tools) {
 }
 ```
 
-The fix is a deliberate step: a person reviews the new wording, runs `node layers/16-security/pin-tools.mjs`, and commits the new lockfile in the same pull request. The diff of `tools.lock.json` then sits in the review next to the change that caused it. In simple words, our tools never change silently, not even when we change them.
+The fix is a deliberate step: a person reviews the new wording, runs `node layers/10-security/pin-tools.mjs`, and commits the new lockfile in the same pull request. The diff of `tools.lock.json` then sits in the review next to the change that caused it. In simple words, our tools never change silently, not even when we change them.
 
 ### Confused deputies
 
@@ -476,8 +476,8 @@ The layer also emits each entry as an `agent.action` event, so Chapter 12's traf
 
 Security work that is not tested decays at the speed of the next refactoring. Nordlys's chapter tests run in CI with the rest of the suite:
 
-- `nordlys-cabins/tests/ch16-security.test.js` (node:test, six tests): cleaning and signals, a hostile review held while a merely odd one is cleaned and published, owner-only `get_booking` for guests and for signed-in members, the gateway refusing an unlisted tool and logging without arguments, pinned definitions catching a changed description, and the Rule of Two check.
-- `chapters/16-security-for-agent-facing-sites/scan-page.test.js` (Playwright, three tests): the scanner finds all seven hiding places in the hostile fixture, nothing in the clean fixture, and nothing on the running Nordlys cabin page after a hostile review was submitted.
+- `nordlys-cabins/tests/ch10-security.test.js` (node:test, six tests): cleaning and signals, a hostile review held while a merely odd one is cleaned and published, owner-only `get_booking` for guests and for signed-in members, the gateway refusing an unlisted tool and logging without arguments, pinned definitions catching a changed description, and the Rule of Two check.
+- `chapters/10-security-for-agent-facing-sites/scan-page.test.js` (Playwright, three tests): the scanner finds all seven hiding places in the hostile fixture, nothing in the clean fixture, and nothing on the running Nordlys cabin page after a hostile review was submitted.
 
 ### What the graders see
 

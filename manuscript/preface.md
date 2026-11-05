@@ -40,10 +40,6 @@ Everything in this book was tested in November 2026. The running example, Nordly
 
 I also used the methods this book teaches on the book itself. Its web edition publishes Markdown versions of every page, an llms.txt, structured data and WebMCP tools, and Chapter 12 reports how it scores in both graders.
 
-## About this edition
-
-This is the second edition of the book. The first edition (version 1.0.0, November 2026) had 20 chapters in five parts and 628 pages. This one follows a shorter, simpler outline: 12 chapters in three parts, with the same six layers, the same running example and the same validation table behind every claim. Most of the work was cutting, not writing. The new parts are a section on rendering for client-rendered apps in Chapter 3, a section on the two ways a shop can let an agent buy in Chapter 11, and Appendix C, which collects pay per crawl and content licensing in one place. The demos repository did not change, and About this book maps its folders to the chapters of this edition.
-
 ## Thanks
 
 This book stands on the work of many people I have never met: the members of the W3C and IETF groups and the Model Context Protocol community who write these specifications in the open, the browser and platform teams who ship them early enough for the rest of us to try, and the developers who publish their measurements instead of keeping them to themselves. Thank you to the web developer communities in Oslo and beyond, whose questions shaped this book long before it had a title. And thank you, reader, for caring about how the web works for everyone who uses it, people and agents alike.

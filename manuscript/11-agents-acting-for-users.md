@@ -36,7 +36,7 @@ That is what OAuth gives you. In simple words, OAuth is a way for a person to gi
 OAuth has four roles, and MCP maps them onto your site like this.[^ch11-1]
 
 - The **resource owner** is the person, Ingrid.
-- The **client** is the agent application acting for her: ChatGPT, Claude, Codex, VS Code, or the small command-line agent in the demos (`chapters/14-connect-an-agent`). In MCP terms this is the MCP client.
+- The **client** is the agent application acting for her: ChatGPT, Claude, Codex, VS Code, or the small command-line agent in the demos (`chapters/11-agents-acting-for-users`). In MCP terms this is the MCP client.
 - The **resource server** is what the agent wants to use: our MCP server at `/mcp`. The specification says it plainly: “A protected MCP server acts as an OAuth 2.1 resource server”.[^ch11-1]
 - The **authorization server** is the part that signs Ingrid in, asks for her consent and issues tokens. It “may be hosted with the resource server or a separate entity”.[^ch11-1] For a real business this is usually the identity provider you already use for member login. For Nordlys we build a small one, so you can see every step.
 
@@ -144,9 +144,9 @@ That’s the response format from the specification: status 403, `error="insuffi
 
 ## Hands-on: delegated access for Nordlys members
 
-> **Hands-on:** This section builds layer `14-oauth` of the demo app and a small command-line agent in `demos/chapters/14-connect-an-agent`. If you don’t read JavaScript, here is the short version: the site publishes two small JSON files that tell agents where its login is, shows members a consent page, gives agents short-lived tokens, and lets members see and disconnect agents. Pick up again at “Build it or use your identity provider?”.
+> **Hands-on:** This section builds layer `11-oauth` of the demo app and a small command-line agent in `demos/chapters/11-agents-acting-for-users`. If you don’t read JavaScript, here is the short version: the site publishes two small JSON files that tell agents where its login is, shows members a consent page, gives agents short-lived tokens, and lets members see and disconnect agents. Pick up again at “Build it or use your identity provider?”.
 
-The layer needs the MCP server from Chapter 8 and adds no dependencies: tokens are signed with Ed25519 from `node:crypto`. Start the app with `npm start -- --upto=14`. (The demos keep the first edition's layer numbers, so this also turns on the earlier layers up to number 14. The table in About this book maps layers to chapters.) These are the new addresses:
+The layer needs the MCP server from Chapter 8 and adds no dependencies: tokens are signed with Ed25519 from `node:crypto`. Start the app with `npm start -- --upto=11`, which turns on this chapter's layers and every layer before them. These are the new addresses:
 
 - `/.well-known/oauth-protected-resource/mcp` (and the same document at the root)
 - `/.well-known/oauth-authorization-server`
@@ -158,7 +158,7 @@ The layer needs the MCP server from Chapter 8 and adds no dependencies: tokens a
 
 Listing 11.1 is the heart of the resource server: a middleware that runs before the MCP handler from Chapter 8. It verifies a token if there is one, and it challenges when a member tool is called without the right scope.
 
-**Listing 11.1** `nordlys-cabins/layers/14-oauth/resource-server.js` (excerpt) — verifying tokens and challenging
+**Listing 11.1** `nordlys-cabins/layers/11-oauth/resource-server.js` (excerpt) — verifying tokens and challenging
 
 ```js
   function verifyBearer(c, header) {
@@ -270,7 +270,7 @@ Both are legitimate designs, and the choice is a business decision. An agent acc
 
 ### A word on GDPR
 
-The General Data Protection Regulation (GDPR) applies to agent traffic the way it applies to all processing. No regulator has written agent-specific rules for websites as of November 2026. Two data protection authorities have published early analyses of agentic AI. The UK Information Commissioner's Office (ICO) published a Tech Futures report on agentic AI in January 2026, which it says is not intended as guidance.[^ch11-9] Spain's data protection authority, the AEPD, published "Inteligencia Artificial Agéntica desde la perspectiva de Protección de Datos" in February 2026.[^ch11-10] Its warning about agent memories applies to our logs too: in a law firm's summary, keeping lots of data "just in case" or to "optimize performance" can clash with purpose limitation and data minimisation.[^ch11-11] I read both reports through those summaries (the ICO page sat behind a bot challenge for us), so read the originals before you quote them in a policy.
+The General Data Protection Regulation (GDPR) applies to agent traffic the way it applies to all processing. Two data protection authorities have published early analyses of agentic AI. The UK Information Commissioner's Office (ICO) published a Tech Futures report on agentic AI in January 2026, which it says is not intended as guidance.[^ch11-9] Spain's data protection authority, the AEPD, published "Inteligencia Artificial Agéntica desde la perspectiva de Protección de Datos" in February 2026.[^ch11-10] Its warning about agent memories applies to our logs too: in a law firm's summary, keeping lots of data "just in case" or to "optimize performance" can clash with purpose limitation and data minimisation.[^ch11-11] I read both reports through those summaries (the ICO page sat behind a bot challenge for us), so read the originals before you quote them in a policy.
 
 **Data minimisation, Article 5(1)(c).** Personal data must be "adequate, relevant and limited to what is necessary in relation to the purposes for which they are processed".[^ch11-12] For agents this has a very concrete meaning: a tool returns the fields the task needs. Chapter 10's `get_booking` tool returns the cabin, dates, guests, total and cancellation deadline, and no name, email, phone or free-text requests. An agent planning a trip needs nothing more. The same article's purpose limitation (5(1)(b)) and storage limitation (5(1)(e)) apply to the tool-call log: it exists for security investigations, so it holds what an investigation needs, for as long as one is plausible.
 
@@ -314,7 +314,7 @@ Figure 11.3 shows how `request_booking`, the new Nordlys tool, uses both modes i
 
 ![Figure 11.3 — request_booking in three rounds. Round 1: the tool opens a booking session and answers input_required with a form-mode request for name and email. Round 2: the client calls again with the answers, and the tool answers input_required with a URL-mode request for the checkout page. The guest confirms there, on Nordlys. Round 3: the client calls again, and the tool returns the booking reference only if the guest confirmed.](images/figure-11-3.png)
 
-> **Hands-on:** The next page shows `request_booking` from `layers/17-consent/` on the wire (its code and tests are in the demos). If you don't write code, here is what it achieves: an agent can prepare a booking, ask its user for a name and email in its own interface, and then hand the user a link to Nordlys's checkout page. The booking exists only after the guest confirms on that page, and the agent finds out when it asks again. Pick up again at "In WebMCP: an open question".
+> **Hands-on:** The next page shows `request_booking` from `layers/11-consent/` on the wire (its code and tests are in the demos). If you don't write code, here is what it achieves: an agent can prepare a booking, ask its user for a name and email in its own interface, and then hand the user a link to Nordlys's checkout page. The booking exists only after the guest confirms on that page, and the agent finds out when it asks again. Pick up again at "In WebMCP: an open question".
 
 Here is what the first answer looks like on the wire. The agent called `request_booking` for Fjellro, and instead of a result, it got this.
 
@@ -448,7 +448,7 @@ Next to UCP there is a crowd of other protocols: ACP for agentic checkout, AP2 f
 
 ### Five rules for a safe checkout
 
-Strip away the protocols' field names, and the safe way for an agent to buy is a pattern you can apply to any site, with or without a commerce protocol. Nordlys's demo layer `12-commerce` implements it with booking sessions shaped after the UCP Lodging draft, and Figure 11.4 shows the flow:
+Strip away the protocols' field names, and the safe way for an agent to buy is a pattern you can apply to any site, with or without a commerce protocol. Nordlys's demo layer `11-commerce` implements it with booking sessions shaped after the UCP Lodging draft, and Figure 11.4 shows the flow:
 
 1. **The agent asks, the server quotes.** The price, the fees and the terms come from your server, computed by the same code your own pages use. Never let an agent send you a price.
 2. **The quote has an identity and an expiry.** A session id, a fixed set of terms and an `expires_at`. If prices or availability change, the agent gets a new quote, never a silently different one. The UCP draft calls this out explicitly: when totals change during a session, the business reports a `totals_changed` warning, and the platform must show it.[^ch11-22]

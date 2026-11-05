@@ -14,7 +14,7 @@ Now the uncomfortable question. How long will that stay true?
 
 My honest answer from years of web work: until the next sprint. A content editor rewrites llms.txt and drops the summary line. A designer replaces a `<label>` with a placeholder because it looks cleaner. A dependency update rewords a tool description. A new Lighthouse release adds an audit. None of these changes looks like an agent-readiness change in a code review, and each of them quietly undoes a chapter of this book. This last chapter is about keeping the work alive: first with the tool every web team already trusts for that job, the test suite, then with measurement, and finally with a plan.
 
-At the end, Nordlys has a pipeline in `chapters/18-testing-agent-readiness/` of the demos repository: four deterministic checks, four browser tests, an injection eval that runs real models, and a GitHub Actions workflow that ties them together. I could not run GitHub Actions on my machine, so I ran every step of the workflow locally, with the versions named in each section, and I say so wherever it matters.
+At the end, Nordlys has a pipeline in `chapters/12-testing-and-measuring-in-production/testing/` of the demos repository: four deterministic checks, four browser tests, an injection eval that runs real models, and a GitHub Actions workflow that ties them together. I could not run GitHub Actions on my machine, so I ran every step of the workflow locally, with the versions named in each section, and I say so wherever it matters.
 
 The second half of the chapter measures what agents actually do on the site in production: who visits, what they get, and what comes of it. Chapter 2 gave a first look at the log classifier, and here we build it properly and add an analytics layer to Nordlys. The chapter ends with a roadmap for a team and with the web edition of this book, which I made agent-ready with the same methods.
 
@@ -34,7 +34,7 @@ The practical rule I follow: **a test that can block a merge must be determinist
 
 ## Deterministic checks against a baseline
 
-> **Hands-on:** This section and the next build the four deterministic checks in `chapters/18-testing-agent-readiness/scripts/`. If you don't write code, here is what they achieve: each check compares today's site with a file the team reviewed, so a pull request fails when something agents rely on disappears, and the failure names the exact check. Content and SEO people own two of those files. Pick up again at "Agent paths in a real browser".
+> **Hands-on:** This section and the next build the four deterministic checks in `chapters/12-testing-and-measuring-in-production/testing/scripts/`. If you don't write code, here is what they achieve: each check compares today's site with a file the team reviewed, so a pull request fails when something agents rely on disappears, and the failure names the exact check. Content and SEO people own two of those files. Pick up again at "Agent paths in a real browser".
 
 A deterministic check needs two things: something to measure, and something to compare with. The measuring part we already have. Chapter 2 wrote `agent-ready-check.mjs`, a local version of the isitagentready.com checks, and every layer chapter since has run it. What we have not had is the second part, a record of what "good" looks like, kept in the repository and reviewed like code.
 
@@ -44,7 +44,7 @@ I call these records baselines, and the pipeline has one per check in `baselines
 
 The first script runs Chapter 2's checker against a running Nordlys and compares the result with `baselines/readiness.json`. Two rules decide: the level may not drop, and no check that passed in the baseline may stop passing. A check that failed before and still fails is fine (it is a known gap, recorded on purpose).
 
-**Listing 12.1** `chapters/18-testing-agent-readiness/scripts/readiness.mjs` — comparing a scan with the baseline (excerpt)
+**Listing 12.1** `chapters/12-testing-and-measuring-in-production/testing/scripts/readiness.mjs` — comparing a scan with the baseline (excerpt)
 
 ```js
 /** Flatten { category: { check: { status } } } into { check: status }. */
@@ -61,9 +61,9 @@ export function compareReadiness(scan, baseline) {
 }
 ```
 
-To see what a failure looks like, I started a second Nordlys with only the layers numbered 0 to 6 (`--upto=6`), as if a refactoring had dropped everything from Part 2, and ran the check against it.
+To see what a failure looks like, I started a second Nordlys with only the layers of Part 1 (`--upto=5`), as if a refactoring had dropped everything from Part 2, and ran the check against it.
 
-**Listing 12.2** Output of `node scripts/readiness.mjs` against Nordlys with layers up to number 6 (the regressed rows only)
+**Listing 12.2** Output of `node scripts/readiness.mjs` against Nordlys with the layers of Part 1 only (the regressed rows only)
 
 ```text
 Readiness level 3 (Agent-Readable), baseline 4
@@ -97,7 +97,7 @@ Why three runs and the median? Chrome's documentation warns that tools registere
 
 The budget file says, per page and per audit, the minimum median score. `"na"` means "this audit should not apply here", which matters more than it looks: if a form suddenly appears on the home page, `webmcp-form-coverage` starts to count, and the budget wants to hear about it.
 
-**Listing 12.3** `chapters/18-testing-agent-readiness/baselines/lighthouse.json` — the budget for the cabin list (excerpt)
+**Listing 12.3** `chapters/12-testing-and-measuring-in-production/testing/baselines/lighthouse.json` — the budget for the cabin list (excerpt)
 
 ```json
     {
@@ -137,7 +137,7 @@ Everything so far checks that the pieces are in place. None of it tells us wheth
 
 This chapter adds one more kind of task, the one Chapter 10 promised: an injection case. The question is simple. When a guest's agent reads a hostile review on Nordlys, does it act against the guest? And does Chapter 10's cleaning and labelling make a measurable difference?
 
-> **Hands-on:** The eval's task and the three versions of the review tool are in `chapters/18-testing-agent-readiness/` of the demos. If you don't write code, skip to Table 12.2. It shows what four real models did with a hostile review, and it is the part of this chapter I would put in front of a product manager.
+> **Hands-on:** The eval's task and the three versions of the review tool are in `chapters/12-testing-and-measuring-in-production/testing/` of the demos. If you don't write code, skip to Table 12.2. It shows what four real models did with a hostile review, and it is the part of this chapter I would put in front of a product manager.
 
 ### One hostile review, three versions of the tool
 
@@ -194,7 +194,7 @@ A test suite that fails at random is worse than no test suite, because it trains
 
 > **Hands-on:** This section assembles the checks into one GitHub Actions workflow. If you don't write code, Figure 12.3 shows the whole pipeline, and the next section describes what each role owns. Pick up again at "Who owns which test".
 
-The workflow lives in `chapters/18-testing-agent-readiness/workflow/agent-readiness.yml`. In the demos repository it sits next to the chapter, because the repository has its own CI for the book's demos. In your project, copy it to `.github/workflows/` and adjust the paths. Figure 12.3 shows the steps, the file each one compares with, and when each one fails.
+The workflow lives in `chapters/12-testing-and-measuring-in-production/testing/workflow/agent-readiness.yml`. In the demos repository it sits next to the chapter, because the repository has its own CI for the book's demos. In your project, copy it to `.github/workflows/` and adjust the paths. Figure 12.3 shows the steps, the file each one compares with, and when each one fails.
 
 ![Figure 12.3 — The Nordlys agent-readiness workflow. It runs on pull requests, pushes to main and once a week. After installing and unit-testing the checkers, it starts Nordlys and runs four deterministic audits, each against a reviewed file, then the agent paths in Chromium against the pinned MCP tools, and it keeps the reports even when a step fails.](images/figure-12-3.png)
 
@@ -239,13 +239,13 @@ The classifier we build next follows this ladder from the top. It takes the stro
 
 > **Hands-on:** This section builds a command-line tool that reads an access log and prints a report like Listing 12.5. If you do not write code, skip to Listing 12.5 to see what the report contains, then continue with "Referrals: what comes back".
 
-The tool lives in the demos repository under `chapters/19-measuring-agent-traffic/`. It has no dependencies, so it runs anywhere Node.js runs, against the logs of any server (nginx, Apache, a CDN export or the JSON log of a Node app). It has four parts: a rules file, a parser, the classifier and the report.
+The tool lives in the demos repository under `chapters/12-testing-and-measuring-in-production/measuring/`. It has no dependencies, so it runs anywhere Node.js runs, against the logs of any server (nginx, Apache, a CDN export or the JSON log of a Node app). It has four parts: a rules file, a parser, the classifier and the report.
 
 ### The classifier: the ladder in code
 
 Listing 12.4 is the heart of the tool. Read the four numbered comments and you have the evidence ladder from Figure 12.4.
 
-**Listing 12.4** `chapters/19-measuring-agent-traffic/lib/classify.mjs` (excerpt) — the classify function
+**Listing 12.4** `chapters/12-testing-and-measuring-in-production/measuring/lib/classify.mjs` (excerpt) — the classify function
 
 ```js
 /**
@@ -294,7 +294,7 @@ A claim we can disprove becomes `other-bot`, not the crawler it claims to be. Th
 Let's have a look at what it prints. The report counts requests per label, the HTML pages among them and the 403 and 429 responses, lists every named agent with its evidence, and computes per platform the crawls, user-triggered fetches, agent visits, referrals and the crawl-to-refer ratio. To try it without a production log, generate the synthetic week first:
 
 ```sh
-cd chapters/19-measuring-agent-traffic
+cd chapters/12-testing-and-measuring-in-production/measuring
 node make-synthetic-log.mjs
 node report.mjs fixtures/synthetic-access.jsonl
 ```
@@ -376,9 +376,9 @@ Cloudflare Radar's AI Insights page is the largest public, regularly updated vie
 
 ## Hands-on: agent analytics inside Nordlys Cabins
 
-> **Hands-on:** This section adds the `19-agent-analytics` layer to Nordlys Cabins: a request log in the JSON format of the classifier, labels for every request and booking, and a dashboard at `/__agents`. If you do not write code, look at Figure 12.5 for the flow and continue with "Outcomes and KPIs per role".
+> **Hands-on:** This section adds the `12-agent-analytics` layer to Nordlys Cabins: a request log in the JSON format of the classifier, labels for every request and booking, and a dashboard at `/__agents`. If you do not write code, look at Figure 12.5 for the flow and continue with "Outcomes and KPIs per role".
 
-The layer reuses the classifier from the previous section (it imports `lib/classify.mjs` and `lib/report.mjs` from `chapters/19-measuring-agent-traffic/`), so the dashboard and a report on exported logs always agree. Figure 12.5 shows where it sits in the request pipeline.
+The layer reuses the classifier from the previous section (it imports `lib/classify.mjs` and `lib/report.mjs` from `chapters/12-testing-and-measuring-in-production/measuring/`), so the dashboard and a report on exported logs always agree. Figure 12.5 shows where it sits in the request pipeline.
 
 ![Figure 12.5 — Where the analytics layer sits. Layer 15 verifies a Web Bot Auth signature, layer 19 classifies the request before the site handles it, and after the response it writes a JSON log record. A booking made during the request is attributed to the class of the visitor that made it.](images/figure-12-5.png)
 

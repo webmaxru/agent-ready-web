@@ -14,7 +14,7 @@ Nordlys will end up with more doors for machines than most real sites will ever 
 
 This chapter answers it, and Chapters 7, 8 and 9 then build the doors that Nordlys chooses here.
 
-> **Note:** This is a planning chapter, and most of it is written for the whole team. The one hands-on section near the end shows a small decision helper in `chapters/13-choosing-the-right-agent-interface/` of the demos repository. It holds the decision trees from this chapter as data and prints a plan for your type of site.[^ch06-1] The demos keep the first edition's folder and layer numbers, and the table in About this book maps them to the chapters of this edition.
+> **Note:** This is a planning chapter, and most of it is written for the whole team. The one hands-on section near the end shows a small decision helper in `chapters/06-choosing-the-right-agent-interface/` of the demos repository. It holds the decision trees from this chapter as data and prints a plan for your type of site.[^ch06-1]
 
 ## Eight doors into one site
 
@@ -110,7 +110,7 @@ A2A is not a way to expose your booking form or your product catalog. It only ma
 
 NLWeb, which Microsoft announced in May 2025 and which R.V. Guha (the person behind RSS, RDF and schema.org) conceived, lets agents ask a site a question in natural language and get schema.org-shaped JSON back. Every NLWeb instance is also an MCP server.[^ch06-11] The reference implementation ingests the structured data and feeds you already publish into a vector store and answers with a language model.
 
-The idea is elegant, but the reference repository has no tagged releases, its last push was on 11 August 2026, and Cloudflare's NLWeb template in AI Search is still in public preview.[^ch06-12] I found no evidence that any major assistant discovers or calls NLWeb endpoints automatically, and no 2026 adoption numbers either, hence "hard to tell" in Table 6.1. If you already run a search index over a large content collection, an NLWeb-style endpoint is a cheap experiment. If you don't, structured data and Markdown give agents the same content without a model in the middle.
+The idea is elegant, but the reference repository has no tagged releases, its last push was on 11 August 2026, and Cloudflare's NLWeb template in AI Search is still in public preview.[^ch06-12] If you already run a search index over a large content collection, an NLWeb-style endpoint is a cheap experiment. If you don't, structured data and Markdown give agents the same content without a model in the middle.
 
 ## One set of rules behind every door
 
@@ -260,7 +260,7 @@ To reach Level 5, Nordlys would have to publish an A2A Agent Card for an agent i
 
 > **Hands-on:** This section shows a small Node.js script that holds this chapter's decision trees and staged plan as data and prints a plan for one site. If you don't write code, the printed plan in Listing 6.1 is the part to read, and you can continue with "What not to build".
 
-The helper lives in `chapters/13-choosing-the-right-agent-interface/` of the demos repository. It has no dependencies and runs on Node.js 22 or newer. When a grader changes its rules or your platform ships a new feature, you edit one data file and print the new plan, instead of rewriting a slide deck.
+The helper lives in `chapters/06-choosing-the-right-agent-interface/` of the demos repository. It has no dependencies and runs on Node.js 22 or newer. When a grader changes its rules or your platform ships a new feature, you edit one data file and print the new plan, instead of rewriting a slide deck.
 
 The data file describes the four site types from this chapter (what to build in priority order, what to consider, what to skip and why, and at which stage each type can stop) and the platforms (which interfaces each one already covers, so the helper moves them from "build" to "configure"). Listing 6.1 is the real output of `node decide.mjs --type ecommerce --platform shopify`.
 
@@ -339,7 +339,7 @@ Each of these is a "not now", not a "never". We'll come back to this decision on
 - Plan in five stages that map to the isitagentready.com levels and the Lighthouse Agentic Browsing audits, and know the graders' opinions: WebMCP doesn't change the level, Level 2 hinges on one Cloudflare-authored robots.txt line, and Level 5 rewards files a small site may not need.
 - Nordlys declines the A2A door and stops at Level 4 with one Level 5 ingredient. Write targets as named checks and keep a "not now" list with reasons.
 
-[^ch06-1]: The decision helper `chapters/13-choosing-the-right-agent-interface/` (`plan.mjs`, `decide.mjs`, `test/plan.test.mjs`), webmaxru/agent-ready-web-demos, GitHub, https://github.com/webmaxru/agent-ready-web-demos (retrieved November 2026).
+[^ch06-1]: The decision helper `chapters/06-choosing-the-right-agent-interface/` (`plan.mjs`, `decide.mjs`, `test/plan.test.mjs`), webmaxru/agent-ready-web-demos, GitHub, https://github.com/webmaxru/agent-ready-web-demos (retrieved November 2026).
 [^ch06-2]: "AI Insights", Cloudflare Radar, https://radar.cloudflare.com/ai-insights (retrieved November 2026). Traffic widgets for the 7 days to 2 November 2026: content type served to AI bots and the Markdown for Agents median response size.
 [^ch06-3]: "A developer toolkit to make your website agent-ready", Kasper Kulikowski and Michael Hablich, Chrome for Developers, 22 June 2026, https://developer.chrome.com/blog/agent-ready-toolkit (retrieved November 2026).
 [^ch06-4]: "Google's Guide to Optimizing for Generative AI Features on Google Search", Google Search Central, last updated 10 July 2026, https://developers.google.com/search/docs/fundamentals/ai-optimization-guide (retrieved November 2026).

@@ -200,12 +200,12 @@ So, after two graders: Level 0 from one, a near pass from the other. Neither tel
 
 The graders and the walk measure what your site offers. Your access log measures who already comes, and it answers a question no grader can: which of the five kinds of visitor from Chapter 1 are already here, and what do they get?
 
-> **Hands-on:** The demos repository has a small log classifier in `chapters/19-measuring-agent-traffic/` (the demos keep the first edition's folder numbers, see "About this book"). It has no dependencies, so it runs anywhere Node.js runs, against the logs of any server: nginx, Apache, a CDN export or the JSON log of a Node app. Chapter 12 explains how it decides each label. If you do not run code, read Listing 2.3 and continue with "Watching an agent struggle".
+> **Hands-on:** The demos repository has a small log classifier in `chapters/12-testing-and-measuring-in-production/measuring/`, the folder of Chapter 12. It has no dependencies, so it runs anywhere Node.js runs, against the logs of any server: nginx, Apache, a CDN export or the JSON log of a Node app. Chapter 12 explains how it decides each label. If you do not run code, read Listing 2.3 and continue with "Watching an agent struggle".
 
 To try it without a production log, generate the synthetic week first. The generator writes 2,000 requests from 26 October to 1 November 2026, with a mix of visitors I invented for the demo, including a fake GPTBot from a documentation address range and a signed ChatGPT agent. On your own server, point `report.mjs` at your access log instead.
 
 ```sh
-cd chapters/19-measuring-agent-traffic
+cd chapters/12-testing-and-measuring-in-production/measuring
 node make-synthetic-log.mjs
 node report.mjs fixtures/synthetic-access.jsonl
 ```

@@ -62,27 +62,27 @@ All the code in this book lives in one repository, `webmaxru/agent-ready-web-dem
 
 **Nordlys Cabins** (`nordlys-cabins/`) is the running example: a fictional company that rents six cabins in Norway, with `nordlys.example` as its domain in the book. It has what a real booking site has: a cabin list with filters, cabin pages, an availability check, a booking form with server-side validation, cancellation, member sign-in with "My bookings", a guide with articles, an FAQ and a contact form. Data lives in JSON files and in memory, so there is no database to set up. The booking flow comes in two front ends that share the same business logic: `clean`, with semantic HTML and native controls, and `legacy`, which is what many real booking sites ship (clickable `<div>` elements, a custom date picker, content loaded late from undocumented endpoints). Chapter 2 uses both to show the difference.
 
-Layers live in folders under `nordlys-cabins/layers/`, with tests in `tests/`. A layer is enabled for every `--upto` value at or above its number, so you can run the site at any stage. The folder numbers come from the first edition of this book, which had 20 chapters, and the demos keep them so that every command in the repository still works. Table 0.1 maps the chapters of this edition to the layers and standalone demos they use.
+Layers live in folders under `nordlys-cabins/layers/`, with tests in `tests/`. Each folder starts with the number of the chapter that builds it, for example `04-crawler-controls` and `04-bot-identity` for Chapter 4. Starting the site with `--upto=N` turns on every layer of Chapters 1 to N, so you can run it as it stands at the end of any chapter. Table 0.1 lists the layers and standalone demos of each chapter.
 
-Table 0.1 The chapters of this edition and their demos
+Table 0.1 The chapters and their demos
 
 | Chapter | Layer folders (`nordlys-cabins/layers/`) | Standalone demos (`chapters/`) |
 | --- | --- | --- |
 | 1 | none | none |
-| 2 | `02-first-steps` | `02-your-first-agent-ready-page`, `19-measuring-agent-traffic` (a first log run) |
+| 2 | `02-first-steps` | `02-your-first-agent-ready-page` |
 | 3 | `03-perception` | `03-how-agents-see-a-page` |
-| 4 | `04-crawler-controls`, `15-bot-identity` | `15-signing-agent` |
-| 5 | `05-structured-data`, `06-agent-content` | none |
-| 6 | none | `13-choosing-the-right-agent-interface` |
-| 7 | `10-tool-design` | `10-designing-tools-agents-can-use` |
-| 8 | `07-public-api`, `08-mcp-server`, `11-discovery` | none |
+| 4 | `04-crawler-controls`, `04-bot-identity` | `04-who-gets-in` |
+| 5 | `05-structured-data`, `05-agent-content` | none |
+| 6 | none | `06-choosing-the-right-agent-interface` |
+| 7 | `07-tool-design` | `07-designing-tools-agents-can-use` |
+| 8 | `08-public-api`, `08-mcp-server`, `08-discovery` | none |
 | 9 | `09-webmcp` | none |
-| 10 | `16-security` | `16-security-for-agent-facing-sites` |
-| 11 | `14-oauth`, `17-consent`, `12-commerce` | `14-connect-an-agent` |
-| 12 | `19-agent-analytics`, `20-versioning` | `18-testing-agent-readiness`, `19-measuring-agent-traffic`, `20-evolving-with-the-standards` |
+| 10 | `10-security` | `10-security-for-agent-facing-sites` |
+| 11 | `11-commerce`, `11-oauth`, `11-consent` | `11-agents-acting-for-users` |
+| 12 | `12-agent-analytics` | `12-testing-and-measuring-in-production` |
 | Appendix B | none | `appendix-b-reference` |
 
-Because `--upto=N` turns on every layer up to N, a high number also turns on layers that this edition introduces later, for example `--upto=15` for the bot identity layer of Chapter 4.
+Chapter 7's layer adds a tool and a lint audit to the MCP server of Chapter 8, so its effect shows from `--upto=8` on. Chapter 2 also uses the log classifier of Chapter 12 for a first look at your own logs.
 
 **Standalone demos** (`chapters/<chapter>/`) are small, separate projects for chapters that need a tool of their own, such as the log classifier in Chapter 12 or the decision helper in Chapter 6. Most of them have no dependencies.
 
