@@ -1,0 +1,10 @@
+# Editorial log: Chapter 8, Server-side tools and discovery (v2)
+
+- Sources: v1 Chapter 7 (8,517 words), Chapter 8 (8,004) and Chapter 11 (9,489), merged into one chapter of 9445 words incl. code and notes (about -64%). Three parts: the API, the MCP server, announcing what you offer.
+- Figures kept: 7.1 -> 8.1, 8.1 -> 8.2, 11.1 -> 8.3 (captions and SVG chapter labels re-pointed to v2). Cut: 7.2 (OpenAPI to tool, Chapter 7 Figure 7.1 shows the same idea), 7.3 (idempotent retry sequence), 8.2 (registry across chapters), 11.2 (three card addresses, explained in prose), 11.3 (level ladder, summarised in prose).
+- Listings kept: 7.1 -> 8.1, 8.1 -> 8.2, 8.2 -> 8.3, 7.5 -> 8.4, 11.2 -> 8.5, 11.3 -> 8.6, 11.5 -> 8.7. Cut: 7.2, 7.3 (idempotent booking route and service, the real HTTP exchange kept), 7.4 (Arazzo step, one sentence), 7.6 (serving the catalog), 8.3 (check_availability, Chapter 7 Listing 7.1 shows the same tool), 8.4 (resource template), 8.5 (registry), 8.6 (in-process test client), 11.1 (catalog extension, prose), 11.4 (skills index code).
+- Cut that a v1 reader might miss: "Try it yourself" curl session, the nine problem types table, the 429 response body (headers kept), the Arazzo workflow detail, versions and deprecation (one sentence pointing to Appendix B), the raw server/discover JSON response (described in prose), the 2025 handshake response, the full hosting table (prose), "Trying it in a real host" (one sentence), "The ladder, chapter by chapter" table, the vertical-format VRP paragraph, the MCP Registry paragraph, the schemas.agentskills.io DNS remark, the skills index JSON with its digest.
+- Dropped claims: v1 ch8 #2 (download numbers), v1 ch11 #33 (registry reverse-DNS names, UNVERIFIED) and #40 (Infoblox and GoDaddy, UNVERIFIED) are no longer in the text.
+- New prose: only the bridges between the three parts. No new facts.
+- Footnotes ch08-1 to ch08-48.
+- Unverified: none in the text. v1 ch7 #1 stays "VERIFIED (date via search snippet + secondary)" as in v1.

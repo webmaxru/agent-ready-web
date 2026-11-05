@@ -1,2 +1,2 @@
 {class: part}
-# Part 2: Being found and read #
+# Part 2: Letting agents act #

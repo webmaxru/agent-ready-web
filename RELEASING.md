@@ -1,11 +1,11 @@
 # Releasing
 
-Each release of *The Agent-Ready Web* is a Git tag `vX.Y.Z` on a commit that is already on `main`: releases come only from merged code. The Release workflow builds the book from that tag and publishes a GitHub Release with four files, plus their checksums:
+Each release of *Agent-Ready Websites in Action* is a Git tag `vX.Y.Z` on a commit that is already on `main`: releases come only from merged code. The Release workflow builds the book from that tag and publishes a GitHub Release with four files, plus their checksums:
 
-- `The-Agent-Ready-Web-Maxim-Salnikov-vX.Y.Z.pdf`: the PDF, 7 × 9.25 in (reading, Leanpub).
-- `The-Agent-Ready-Web-Maxim-Salnikov-vX.Y.Z-print-7.5x9.25.pdf`: the paperback interior, 7.5 × 9.25 in (KDP). Same text block and page count as the PDF.
-- `The-Agent-Ready-Web-Maxim-Salnikov-vX.Y.Z.epub`: EPUB 3, checked with EPUBCheck.
-- `The-Agent-Ready-Web-HTML-vX.Y.Z.zip`: the web edition, readable offline (open `index.html`).
+- `Agent-Ready-Websites-in-Action-Maxim-Salnikov-vX.Y.Z.pdf`: the PDF, 7 × 9.25 in (reading, Leanpub).
+- `Agent-Ready-Websites-in-Action-Maxim-Salnikov-vX.Y.Z-print-7.5x9.25.pdf`: the paperback interior, 7.5 × 9.25 in (KDP). Same text block and page count as the PDF.
+- `Agent-Ready-Websites-in-Action-Maxim-Salnikov-vX.Y.Z.epub`: EPUB 3, checked with EPUBCheck.
+- `Agent-Ready-Websites-in-Action-HTML-vX.Y.Z.zip`: the web edition, readable offline (open `index.html`).
 - `SHA256SUMS.txt`.
 
 The release notes are the version's section of [`CHANGELOG.md`](CHANGELOG.md). After a stable release is published, the workflow asks `deploy-swa` to put that tag on the web edition at https://agent-ready-web.salnikov.no (see [`DEPLOY.md`](DEPLOY.md)). Everything runs on the built-in `GITHUB_TOKEN`; no secrets are needed for the release itself.
@@ -14,12 +14,12 @@ The release notes are the version's section of [`CHANGELOG.md`](CHANGELOG.md). A
 
 Versions follow Semantic Versioning, read for a book:
 
-- **Major** (`2.0.0`): a new edition. The book is revised as a whole, chapters are added, removed or reordered, or a standard it teaches changes in a way that breaks earlier listings.
+- **Major** (`2.0.0`): the book is revised as a whole, chapters are added, removed or reordered, or a standard it teaches changes in a way that breaks earlier listings.
 - **Minor** (`1.1.0`): new material inside the current structure. A new section or appendix, a new figure or listing, a status update (for example a standard that moves from draft to recommendation, or a new Lighthouse version that changes the scoring).
 - **Patch** (`1.0.1`): corrections. Typos, broken links, wrong numbers, layout fixes, theme and build fixes that change no text.
 - **Pre-release** (`1.1.0-rc.1`): a review copy. Published as a GitHub pre-release, never marked Latest, and not deployed to the web edition.
 
-Version 1.0.0 is the first edition.
+Version 2.0.0 is the release of *Agent-Ready Websites in Action*.
 
 ## Cut a release (the usual way: merge a release pull request)
 

@@ -4,13 +4,12 @@ This chapter covers
 
 - Measuring a page with isitagentready.com and Lighthouse's Agentic Browsing category
 - A local version of isitagentready's checks that also works on `localhost`
+- A first look at your own access logs
 - Watching a structure-only agent try to book a cabin, and fail
 - Fixing the page with semantic HTML, a robots.txt, a sitemap and one declarative WebMCP tool
 - The habit for the rest of the book: measure, change one layer, measure again
 
-Chapter 1 was the map. This chapter is the walk. We take one real page, the booking page of Nordlys Cabins, in its agent-hostile legacy version, and do everything once: measure it with the two graders, watch an agent try to use it, fix it in three small steps and measure again. Nothing here is deep yet. Every topic in this chapter has its own chapter later, where we do it properly. The point of doing it all once, quickly, is to feel the loop. After this chapter you will know what each instrument tells you, what it misses, and how a change to a page shows up in the numbers.
-
-I also want to show you a surprise early, because it shapes the rest of the book: the page that an agent cannot use at all gets a pretty good grade from one of the graders. Let's see why.
+Chapter 1 was the map. This chapter is the walk. We take one real page, the booking page of Nordlys Cabins, in its agent-hostile legacy version, and do everything once: measure it with the two graders, take a first look at who already visits, watch an agent try to use the page, fix it in three small steps and measure again. Every topic here has its own chapter later. The point of doing it all once, quickly, is to feel the loop.
 
 ## The page we start with
 
@@ -32,8 +31,6 @@ Here is the widget as the browser has it in the DOM, after the page's JavaScript
 ```
 
 Let's have a look at what this markup tells a machine. There is no `<form>`, so nothing says "this is something you submit". The two date inputs are read-only and have no label, only placeholder text (clicking them opens a custom calendar built from more `<div>` elements). The guest counter is a `<span>` between two `<div>` elements that happen to contain a minus and a plus sign. The "Check" and "Book now" buttons are `<div>` elements with a CSS class and a click handler. And the whole widget is not in the HTML the server sends at all: the page's script fetches the cabin data and injects it about 400 milliseconds after the page loads.
-
-To a person with a mouse and good eyesight, all of that is invisible. To an agent that reads the accessibility tree, the page has almost nothing to hold on to.
 
 > **Hands-on:** The rest of this section and the next three sections run commands against the demo site. You need Node.js 24 or later, the demos repository (https://github.com/webmaxru/agent-ready-web-demos) and about ten minutes. If you do not run code, read the outputs in the text and pick up again at "What a screenshot agent would do". The numbers in this chapter were measured on 2 November 2026 with Chromium 156.0.8078.4, Playwright 1.64.1 and Lighthouse 13.6.0.
 
@@ -82,7 +79,7 @@ The response is JSON with a `level`, a `levelName`, the result of every check wi
 
 robots.txt and the sitemap passed. The robots.txt even names a long list of AI crawlers (GPTBot, ClaudeBot, PerplexityBot and others), so "AI bot rules" passed too. Link headers, Markdown negotiation, Content Signals and every discovery file failed, and the next-level hint says exactly one thing: `contentSignals`.[^ch02-1] So my own site is one robots.txt line away from Level 2. The shoemaker's children, as they say :)
 
-If you work with a coding agent, the same scanner is available as a tool. isitagentready.com runs a stateless MCP server at `https://isitagentready.com/mcp` with one tool, `scan_site`, which takes a URL and returns the same result. You can add it to any MCP client and ask your agent to "scan our staging site and list what fails". Chapter 18 uses the API in CI.
+If you work with a coding agent, the same scanner is available as a tool: isitagentready.com runs a stateless MCP server at `https://isitagentready.com/mcp` with one tool, `scan_site`, which takes a URL and returns the same result. Chapter 12 uses the API in CI.
 
 ### A local scanner for localhost
 
@@ -139,7 +136,7 @@ export function computeLevel(r) {
 
 Two checks cannot work exactly as the real ones do. DNS-AID needs a public hostname with DNSSEC, so on `127.0.0.1` the script answers `unableToCheck`. And the real scanner finds WebMCP tools by loading the page in a headless browser. A script without a browser can only look for declarative forms in the HTML and for `registerTool()` calls in the page's own script files, and it says so. For the browser view we have Lighthouse.
 
-> **Note:** A re-implementation is only as good as its last comparison with the original. On 2 November 2026 the script gave the same level as the real scanner for all six public sites I compared (salnikov.no, isitagentready.com, vercel.com, developer.chrome.com, docs.stripe.com and allbirds.com). Individual checks differed in three expected places: WebMCP tools registered by JavaScript (vercel.com), commerce checks on a shop (allbirds.com, because the script does not detect shops) and the opt-in A2A check. When the two disagree, the real scanner wins.
+> **Note:** A re-implementation is only as good as its last comparison with the original. On 2 November 2026 the script gave the same level as the real scanner for all six public sites I compared (salnikov.no, isitagentready.com, vercel.com, developer.chrome.com, docs.stripe.com and allbirds.com), with individual checks differing in three expected places. When the two disagree, the real scanner wins.
 
 Run it against the baseline:
 
@@ -158,27 +155,12 @@ contentAccessibility  markdownNegotiation     fail           Accept: text/markdo
 botAccessControl      robotsTxtAiRules        fail           no AI bot rules in robots.txt
 botAccessControl      contentSignals          fail           no Content-Signal line in robots.txt
 botAccessControl      webBotAuth              neutral        no key directory (informational, does not affect the level)
-discovery             mcpServerCard           fail           no valid MCP Server Card
-discovery             a2aAgentCard            neutral        opt-in check, skipped
-discovery             agentSkills             fail           no valid Agent Skills index
-discovery             webMcp                  fail           no WebMCP tools found without a browser (Lighthouse checks in a real browser)
-discovery             apiCatalog              fail           /.well-known/api-catalog: HTTP 404
-discovery             oauthDiscovery          fail           no OAuth/OIDC discovery metadata
-discovery             oauthProtectedResource  fail           no OAuth Protected Resource Metadata
-discovery             authMd                  fail           no /auth.md setup
-discovery             ard                     fail           no ARD manifest
-discovery             personalAgentProtocol   fail           no poppy.json (informational, does not affect the level)
-commerce              x402                    neutral        no x402 response (not scored)
-commerce              mpp                     neutral        no x-payment-info in /openapi.json (not scored)
-commerce              ucp                     neutral        no /.well-known/ucp (not scored)
-commerce              acp                     neutral        no /.well-known/acp.json (not scored)
-commerce              ap2                     neutral        opt-in check, skipped
 
 Level 0: Not Ready
 Next: Level 1 (Basic Web Presence), work on: robotsTxt, sitemap, linkHeaders
 ```
 
-Level 0. No robots.txt, no sitemap, nothing for agents at all. That is no surprise for a page that was never designed for them. The interesting result is the next one.
+(I kept the first nine checks and the summary. Every discovery check fails and the commerce checks are neutral.) Level 0. No robots.txt, no sitemap, nothing for agents at all. The interesting result is the next one.
 
 ### Lighthouse's Agentic Browsing category
 
@@ -191,7 +173,7 @@ npx lighthouse@13.6.0 http://127.0.0.1:3000/cabins/fjellro \
   --output=json --output-path=./baseline.json
 ```
 
-Please note: the category needs Chrome 150 or later, and the WebMCP audits only see tools when WebMCP is switched on, either through the origin trial on your own origin or with the `WebMCPTesting` feature flag shown here.[^ch02-2] Without the flag, the WebMCP audits simply report that there is nothing to check. In Chrome DevTools you can run the same category from the Lighthouse panel, and the result is the same.
+Please note: the category needs Chrome 150 or later, and the WebMCP audits only see tools when WebMCP is switched on, through the origin trial on your own origin or with the `WebMCPTesting` feature flag shown here.[^ch02-2]
 
 Here is what Lighthouse 13.6.0 said about the baseline page:
 
@@ -214,17 +196,48 @@ The CLS failure is real, though. The widget arrives 400 milliseconds after the f
 
 So, after two graders: Level 0 from one, a near pass from the other. Neither tells us the simple fact we care about, which is whether an agent can book Fjellro on this page. For that we need the third instrument.
 
+### A first look at your own logs
+
+The graders and the walk measure what your site offers. Your access log measures who already comes, and it answers a question no grader can: which of the five kinds of visitor from Chapter 1 are already here, and what do they get?
+
+> **Hands-on:** The demos repository has a small log classifier in `chapters/12-testing-and-measuring-in-production/measuring/`, the folder of Chapter 12. It has no dependencies, so it runs anywhere Node.js runs, against the logs of any server: nginx, Apache, a CDN export or the JSON log of a Node app. Chapter 12 explains how it decides each label. If you do not run code, read Listing 2.3 and continue with "Watching an agent struggle".
+
+To try it without a production log, generate the synthetic week first. The generator writes 2,000 requests from 26 October to 1 November 2026, with a mix of visitors I invented for the demo, including a fake GPTBot from a documentation address range and a signed ChatGPT agent. On your own server, point `report.mjs` at your access log instead.
+
+```sh
+cd chapters/12-testing-and-measuring-in-production/measuring
+node make-synthetic-log.mjs
+node report.mjs fixtures/synthetic-access.jsonl
+```
+
+**Listing 2.3** Output of `node report.mjs fixtures/synthetic-access.jsonl`, the first table (synthetic data, not real traffic)
+
+```text
+Requests: 2000 (2026-10-26T00:00:05.839Z to 2026-11-01T23:55:37.275Z)
+
+By class                requests   share   HTML   403  429
+  signed-agent                55    2.8%     33     0    0
+  training                   578   28.9%    565     0    0
+  search                     429   21.4%    417     0    0
+  user-fetch                 100    5.0%     96     0    0
+  browsing-agent              51    2.5%     50     0    0
+  other-bot                  146    7.3%    112     0   29
+  unknown                    641   32.0%    376     0    0
+```
+
+Read it the way you read Table 1.1 in Chapter 1, but for your own site. The training crawlers made 28.9% of the requests and the search crawlers 21.4%. The full report goes on to list every named agent with its evidence: 76 requests claimed to be GPTBot from the wrong network and were filed under `other-bot`, and the signed ChatGPT agent made 55 requests. On your own log, write down the share of `user-fetch` and `browsing-agent` requests (the visitors that act for a person), the 403 and 429 responses they got, and the share of `unknown`. One warning: the combined log format has nowhere to keep a signature result, so the same week logged that way shows zero signed agents. Chapter 4 turns these numbers into access decisions, and Chapter 12 builds the full measurement.
+
 ## Watching an agent struggle
 
-The most honest test of an agent-ready page is an agent. The problem with real agents in a book is that they are not repeatable. A browsing agent built on a large language model takes a different path each time, depends on the model version, and costs money per run. I do want you to try a real one, and we do that at the end of this section. For a measurement we can repeat in CI, I built something smaller.
+The most honest test of an agent-ready page is an agent. But real agents are not repeatable: a browsing agent built on a large language model takes a different path each time, depends on the model version and costs money per run. For a measurement we can repeat in CI, I built something smaller.
 
 ### A structure-only agent
 
 `booking-walk.mjs` is a scripted stand-in for an agent that works from the accessibility tree. It has a fixed task (book Fjellro from 2 to 5 December 2026 for three guests, as the guest Ingrid Berg) and it may only find things the way such an agent does: by role and accessible name ("the link called Cabins", "the button called Check availability") or by label ("the field labelled Check-in"). It never uses CSS selectors, element ids or pixel coordinates. Playwright's `getByRole()` and `getByLabel()` locators work exactly this way, on top of the browser's accessibility tree.
 
-Listing 2.3 shows the first six of the thirteen steps.
+Listing 2.4 shows the first six of the thirteen steps.
 
-**Listing 2.3** `chapters/02-your-first-agent-ready-page/booking-walk.mjs` — the first steps of the booking task (excerpt)
+**Listing 2.4** `chapters/02-your-first-agent-ready-page/booking-walk.mjs` — the first steps of the booking task (excerpt)
 
 ```js
 export function bookingSteps(page, base, task = TASK) {
@@ -239,7 +252,7 @@ export function bookingSteps(page, base, task = TASK) {
     { name: 'Press "Check availability"', blocks: true, run: () => page.getByRole('button', { name: 'Check availability' }).click() },
 ```
 
-Two small details make the walk fair. Navigation steps carry a `recover` URL: if the agent cannot find the "Cabins" link, it goes to `/cabins` directly, the way a real agent would type a URL it can guess. And some steps carry `blocks: true`. When a blocking step fails, the steps that depend on it are skipped, because there is no availability result to read if the check never ran. Each step also has a short timeout, so a missing element fails fast.
+Two small details make the walk fair. Navigation steps carry a `recover` URL, so if the agent cannot find the "Cabins" link it goes to `/cabins` directly, the way a real agent would guess a URL. And when a blocking step fails, the steps that depend on it are skipped, because there is no availability result to read if the check never ran.
 
 > **Hands-on:** Run the walk against the baseline. The script uses Playwright's Chromium. If you have not used Playwright on this machine before, install the browser once with `npx playwright install chromium`.
 
@@ -269,17 +282,17 @@ node chapters/02-your-first-agent-ready-page/booking-walk.mjs http://127.0.0.1:3
 
 Zero of thirteen — not even the first click. The navigation links are `<div>` elements, so even the first step has nothing with the role "link" and the name "Cabins". The recovery URLs get the agent to the cabin page, and there it finds no field labelled "Check-in", no field labelled "Guests" (only a number in a `<span>`) and no button called "Check availability" (only a `<div>` that says "Check"). Step 6 blocks, so the rest is skipped.
 
-The date fields deserve a closer look, because they are almost there. Chrome's accessibility tree does call each read-only input a textbox, and it borrows the placeholder as the name, so there is a textbox "Check-in". Playwright's `getByLabel()` does not count a placeholder as a label, which is why our walk did not find it. So I tried the more forgiving route by hand, `getByRole('textbox', { name: 'Check-in' })`. It found the input, and the fill failed anyway with Playwright's message "element is not editable". The input is read-only because a person is meant to use the calendar. An agent that types gets nowhere.
+The date fields are almost there. Chrome's accessibility tree calls each read-only input a textbox and borrows the placeholder as its name. Playwright's `getByLabel()` does not count a placeholder as a label, and even the more forgiving `getByRole('textbox', { name: 'Check-in' })` ends with "element is not editable", because the input is read-only. An agent that types gets nowhere.
 
 I want to be careful about what this result means. It does not mean that no agent could ever book this cabin. It means that an agent that relies on the page's structure, which is what Chrome calls the agent's "primary data model", gets nothing to work with.[^ch02-4] Several of the agents from Chapter 1 work this way, and the ones that do not still use the structure first when it is there.
 
 ### What a screenshot agent would do
 
-A screenshot agent is the other kind. It looks at a picture of the page, decides where to click and sends mouse and keyboard events at pixel coordinates. Such an agent could probably click the "Check" div, because it looks like a button. It might also get through the custom calendar, one click per day of navigation, with a new screenshot and a new model call after each click. The overlay booking form would need more of the same.
+A screenshot agent is the other kind. It looks at a picture of the page and clicks at pixel coordinates. Such an agent could probably click the "Check" div, because it looks like a button, and might get through the custom calendar, one click, one screenshot and one model call at a time.
 
-So the legacy page is not impossible for every agent. It is slow, expensive and fragile for all of them, and impossible for some. Anthropic's documentation for its browser tool makes the same point from the other side: it recommends element references from the page's structure over coordinates, because "a reference survives layout shifts and reflows that make pixel coordinates fragile".[^ch02-5] Our 0.116 layout shift is exactly that kind of reflow.
+So the legacy page is not impossible for every agent. It is slow, expensive and fragile for all of them, and impossible for some. Anthropic's documentation for its browser tool recommends element references from the page's structure over coordinates, because "a reference survives layout shifts and reflows that make pixel coordinates fragile".[^ch02-5] Our 0.116 layout shift is exactly that kind of reflow.
 
-If you have access to a browsing agent, try it now. Give it the same task in plain words ("Book the cabin Fjellro on http://…, 2 to 5 December 2026, three guests, name Ingrid Berg, email ingrid@example.com") against a public copy of the baseline, and count the steps, the time and the retries. Then do the same again after the fixes below. I did not put such a run in a table, because the numbers change with every model release and would mislead you within months. Chapter 18 shows how to turn this into a proper evaluation with real models.
+If you have access to a browsing agent, try it: give it the same task in plain words against a public copy of the baseline, count the steps, the time and the retries, and do it again after the fixes. I did not put such a run in a table, because the numbers change with every model release. Chapter 12 shows how to turn this into a proper evaluation with real models.
 
 ## The fix, part 1: semantic HTML
 
@@ -326,20 +339,15 @@ Nothing in it is clever. It is the HTML that every web developer learned once, a
 
 Of course, every row in this table also helps people. Screen reader users, keyboard users and people on a slow connection get the same benefits. This is the cheapest argument you will ever make to a product manager: the work for agents is accessibility work that was overdue anyway.
 
-### Five fixes that look right and are not
+### Three fixes that look right and are not
 
 When teams fix a page like this one under time pressure, I see the same shortcuts again and again. They all make some checker happier and leave the agent where it was.
 
 **`role="button"` on the div.** Adding the role gives the element the right name in the tree, but none of the behaviour. A real `<button>` is focusable, reacts to Enter and Space, and submits its form. A `<div role="button">` does none of that until you write the JavaScript yourself. The W3C's first rule of ARIA use says it plainly: if a native HTML element with the semantics and behaviour you need exists, use it "instead of re-purposing an element and adding an ARIA role".[^ch02-6] Chapter 3 shows what ARIA is good for, and it is a lot, but replacing a button is not it.
 
-**`aria-label` instead of a visible label.** An `aria-label="Check-in"` on the input gives agents a name and gives sighted people nothing. A visible `<label>` gives both, and it makes the click target bigger. Use `aria-label` when there is truly no room for text, like an icon-only button.
-
 **Placeholder as label.** As we saw, axe accepts it, so the audit passes. But the placeholder disappears as soon as the field has a value, so a screenshot agent that checks its own work, or a person who comes back to the form, no longer sees what the field was for. And our structure-only agent, which asks for "the field labelled Check-in", did not find it.
 
 **Keeping the custom date picker.** Custom calendars are where agents go to die — every extra click is another screenshot and another guess. A native `<input type="date">` takes a date string, which is exactly what an agent has. If your design team insists on a custom calendar, keep a real date input underneath it that the calendar writes to, so the form still works when someone (or something) types.
-
-**Rendering on the client only.** Our legacy page waited 400 milliseconds for its own JavaScript. Some agents fetch only the HTML the server sends and never run the script, and the ones that do run it may read the page before the content arrives. Server rendering, or at least the important content and forms in the initial HTML, removes a whole class of failures. Chapter 3 measures this with the page's three views.
-
 
 > **Hands-on:** Run the three instruments against the clean page.
 
@@ -399,16 +407,15 @@ And here is the clean availability form:
 
 Three lines against eight — and the count is the smaller part of the story. In the legacy tree, the guest counter and the "Check" button have dissolved into one line of text, "− 2 + Check", and there is no way to tell from the tree which part of it can be clicked. In the clean tree every control has a role and a name, the guests field is a `spinbutton` with its current value, and the hint "Up to 6 guests." sits right before it. That is everything an agent needs to fill the form without guessing, and it came from plain HTML.
 
-
 ## The fix, part 2: robots.txt and a sitemap
 
 The next two fixes are files at the root of the site. They are tiny, and they move the server-side grader.
 
-Nordlys Cabins adds features in layers, one folder per chapter. The layer for this chapter is `layers/02-first-steps/`, and when you start the server with `--upto=2` (or with no `--upto` at all) it is switched on. Listing 2.4 is the first part of it.
+Nordlys Cabins adds features in layers, one folder per chapter. The layer for this chapter is `layers/02-first-steps/`, and when you start the server with `--upto=2` (or with no `--upto` at all) it is switched on. Listing 2.5 is the first part of it.
 
 > **Hands-on:** Restart the server with this chapter's layer: `npm start -w nordlys-cabins -- --upto=2`. The listing below is already in the repository, so there is nothing to type.
 
-**Listing 2.4** `nordlys-cabins/layers/02-first-steps/index.js` — robots.txt and sitemap.xml (excerpt)
+**Listing 2.5** `nordlys-cabins/layers/02-first-steps/index.js` — robots.txt and sitemap.xml (excerpt)
 
 ```js
     // robots.txt: everyone may crawl the public pages, nobody needs the private ones.
@@ -452,7 +459,7 @@ Nordlys Cabins adds features in layers, one folder per chapter. The layer for th
 
 The robots.txt allows everything public and keeps crawlers out of two private areas, the member account and the booking management pages. It also points to the sitemap. The sitemap lists every public page the site can render, with absolute URLs, because the sitemap protocol requires them.[^ch02-7]
 
-Please note what this robots.txt does *not* do. It has only a wildcard group, and it says nothing about AI crawlers or how content may be used. That is enough for isitagentready's "AI bot rules" check, which passes when "wildcard rules that apply to all crawlers" are present.[^ch02-8] But it is not a decision. Who may train on your content, who may cite it, and whether the user-triggered fetchers from Chapter 1 should be treated differently, are business decisions, and Chapter 4 makes them properly, with Content Signals and named user agents. For now we only make sure that crawlers find a valid file instead of an HTML 404 page.
+Please note what this robots.txt does *not* do. It has only a wildcard group, and it says nothing about AI crawlers or how content may be used. That is enough for isitagentready's "AI bot rules" check, which passes when "wildcard rules that apply to all crawlers" are present.[^ch02-8] But it is not a decision. Who may train on your content and who may cite it are business decisions, and Chapter 4 makes them properly.
 
 Run the local scanner again and the level moves for the first time:
 
@@ -469,7 +476,7 @@ Next: Level 2 (Bot-Aware), work on: contentSignals
 
 (I kept only the lines that changed plus the summary. Level 1 needs two of the three basics, so the missing Link headers do not hold us back.)
 
-One thing surprised me while measuring, and it is worth a minute. The same layer also works on the legacy front end, because robots.txt and the sitemap do not depend on the markup. So I ran the instruments on the legacy page with layer 02 switched on. The server-side scan said Level 1, the same as the clean page. The booking walk said 0 of 13, the same as before. A site can climb the server-side ladder while every agent that depends on the page structure still fails. That is the best argument I know for never using one grader alone.
+One thing surprised me while measuring. The same layer also works on the legacy front end, because robots.txt and the sitemap do not depend on the markup. With layer 02 on the legacy page, the server-side scan said Level 1 and the booking walk still said 0 of 13. A site can climb the server-side ladder while every agent that depends on the page structure still fails. That is the best argument I know for never using one grader alone.
 
 ## The fix, part 3: one declared tool
 
@@ -479,9 +486,9 @@ WebMCP is a browser API, incubated in the W3C Web Machine Learning Community Gro
 
 Please note: in October 2026 the declarative attributes moved out of the WebMCP specification text into a separate explainer in the same repository, while Chrome kept shipping them in its origin trial. So this is the least settled thing in the chapter — keep an eye on it. I use it anyway, because it costs six attributes, it degrades to a plain form, and it shows the idea of a declared tool better than anything else I know. Chapter 9 follows its status.
 
-Listing 2.5 adds these attributes to the availability form. The layer system's `formAttributes()` and `fieldAttributes()` helpers put them on the form the page already renders, so the HTML stays in one place.
+Listing 2.6 adds these attributes to the availability form. The layer system's `formAttributes()` and `fieldAttributes()` helpers put them on the form the page already renders, so the HTML stays in one place.
 
-**Listing 2.5** `nordlys-cabins/layers/02-first-steps/index.js` — the availability form as a declarative WebMCP tool (excerpt)
+**Listing 2.6** `nordlys-cabins/layers/02-first-steps/index.js` — the availability form as a declarative WebMCP tool (excerpt)
 
 ```js
     // One declarative WebMCP tool: the availability form becomes check_availability.
@@ -509,7 +516,7 @@ The form now starts like this in the HTML the server sends (again reformatted):
            toolparamdescription="Arrival date">
 ```
 
-Why only this form, and not the booking form on the next page? Because checking availability only reads data. Nothing changes if an agent calls it a hundred times, so letting the agent submit it on its own (`toolautosubmit`) is safe. Booking a cabin creates a reservation and, in a real business, a charge. That form should stay something the person confirms, and Chapter 9 and Chapter 17 show how to declare consequential tools with confirmation built in. In simple words: start with tools that read, and add tools that write when you have thought about consent.
+Why only this form, and not the booking form on the next page? Because checking availability only reads data, so letting the agent submit it on its own (`toolautosubmit`) is safe. Booking a cabin creates a reservation and, in a real business, a charge. That form should stay something the person confirms, and Chapters 9 and 11 show how to declare consequential tools with confirmation built in. In simple words: start with tools that read, and add tools that write when you have thought about consent.
 
 To see the tool, open the page in a Chrome that runs with the testing flag (`--enable-features=WebMCPTesting` on the command line, or "WebMCP for testing" in `chrome://flags`) and ask the page for its tools in the DevTools console. The Model Context Tool Inspector extension shows the same list in a panel, if you prefer clicking.[^ch02-11]
 
@@ -564,9 +571,9 @@ const [tool] = await document.modelContext.getTools();
 await document.modelContext.executeTool(tool, { checkIn: '2026-12-09', checkOut: '2026-12-12', guests: 2 });
 ```
 
-Chrome fills in the form, submits it (because of `toolautosubmit`) and the page shows the result for three nights, NOK 7,900 in our demo data. The tests in the repository, `tests/ch02-first-page.spec.js`, do exactly this in Playwright.
+Chrome fills in the form, submits it (because of `toolautosubmit`) and the page shows the result for three nights, NOK 7,900 in our demo data. The repository's Playwright tests do exactly this.
 
-Please note: these console calls are testing hooks behind a flag, and Chapter 9 covers the API surface and its current state in detail. What matters here is the measurement. Run Lighthouse once more, and the WebMCP audits now have something to check. Form coverage passes, because the only form on the page is annotated. Schema validity passes, because Chrome's generated schema is valid. The category reports 4 of 4 scored audits passed. The local scanner reports the declarative tool too (`webMcp pass, 1 declarative form tool(s)`), though, as on the real scanner, WebMCP does not change the level.
+Please note: these console calls are testing hooks behind a flag, and Chapter 9 covers the API surface. What matters here is the measurement. Run Lighthouse once more: form coverage passes, because the only form on the page is annotated, schema validity passes, and the category reports 4 of 4 scored audits passed. The local scanner reports the declarative tool too, though, as on the real scanner, WebMCP does not change the level.
 
 And in every browser without WebMCP the attributes are ignored and the form is just a form. On 2 November 2026 no browser exposes WebMCP by default. Chrome exposes it on origins that joined the origin trial, which runs to Chrome 162, or with the testing flag.[^ch02-12] Nothing breaks. That is the nice property of the declarative form: it is progressive enhancement in the most literal sense.
 
@@ -587,7 +594,7 @@ Table 2.2 puts the three runs side by side. All numbers come from the same machi
 | Lighthouse WebMCP schema validity | Not applicable | Not applicable | Pass |
 | Lighthouse category | 1 of 2 | 2 of 2 | 4 of 4 |
 
-Read the table by row, not by column. Each instrument moved at a different step. The agent walk moved with the markup. The server-side scan moved with the files. Lighthouse moved a little with each. If we had used only one of them, we would have told a different story about the same afternoon of work.
+Read the table by row, not by column. The agent walk moved with the markup, the server-side scan moved with the files, and Lighthouse moved a little with each. With only one of them, we would have told a different story about the same afternoon of work.
 
 Bottomline: a page an agent can use is mostly a page that was built well in the first place. Semantic HTML did the heavy lifting here, and two small files and three attributes did the rest. The total change is one layer file of 78 lines, comments included, and a front end that uses the elements HTML already has.
 
@@ -595,11 +602,10 @@ Bottomline: a page an agent can use is mostly a page that was built well in the 
 
 You can run this whole chapter on your own site in an afternoon, without the demo. This is the order I use with teams:
 
-1. **Pick three tasks** that matter to the business and that an agent might do for a customer. For a shop it is "find a product and add it to the cart", for a SaaS it is often "start a trial" or "find the price of the team plan", for a cabin company it is booking. Write each one as a sentence with concrete values, like our `TASK` object.
-2. **Scan the public site** with isitagentready.com, or with the companion script on a staging origin. Save the JSON. This takes a minute and gives you the server-side baseline.
-3. **Run Lighthouse's Agentic Browsing category** on the page where each task starts, with the version pinned. Save the JSON too.
-4. **Walk each task by structure.** Copy `booking-walk.mjs`, change the steps to your task and run it. Each failing step is a concrete, reproducible bug report: "there is no button called Add to cart on the product page". Developers love bug reports like that — I bet yours will too.
-5. **Sort the findings by layer and by owner.** robots.txt and the sitemap usually belong to whoever owns SEO and infrastructure. Markup belongs to the front-end team and the design system. Tools belong to the product team. Chapter 1's six layers make a good set of labels for the backlog.
+1. **Pick three tasks** that matter to the business and that an agent might do for a customer, each written as a sentence with concrete values, like our `TASK` object.
+2. **Scan and audit.** Scan the public site with isitagentready.com (or the companion script on a staging origin), run Lighthouse's Agentic Browsing category with a pinned version on the page where each task starts, and save the JSON.
+3. **Walk each task by structure.** Copy `booking-walk.mjs`, change the steps to your task and run it. Each failing step is a concrete, reproducible bug report: "there is no button called Add to cart on the product page".
+4. **Sort the findings by layer and by owner.** Chapter 1's six layers make a good set of labels for the backlog.
 
 If your site runs on a platform like Shopify, some of the server-side checks may already pass without anyone on your team doing anything, as we saw in Chapter 1. The markup in your theme is still yours, so steps 3 and 4 matter just as much.
 
@@ -612,17 +618,16 @@ This chapter was small on purpose, because I wanted the loop to be visible. Ever
 3. **Measure again**, with the same versions of the tools. Lighthouse changed its agentic category in every minor release from 13.2 to 13.6, so pin the version in your scripts and write it next to every result.
 4. **Record the deltas per check**, not only the level. "Level 1" hides the fact that `robotsTxtAiRules` passes only because of a wildcard group. A table like Table 2.2, kept in your repository, is worth more than any single score.
 
-The agent walk deserves a special word. A scripted walk like ours is not a real agent, and it never will be. But it is cheap, deterministic and exactly as strict as the accessibility tree, which makes it a good regression test. When it breaks, a real agent probably struggles too. Chapter 18 puts the three instruments into CI and adds evaluations with real models on top.
+The agent walk deserves a special word. A scripted walk like ours is not a real agent, and it never will be. But it is cheap, deterministic and exactly as strict as the accessibility tree, which makes it a good regression test. Chapter 12 puts the three instruments into CI and adds evaluations with real models on top.
 
 ## Summary
 
 - Three instruments, three questions. A server-side scan in the style of isitagentready.com checks files and headers. Lighthouse's Agentic Browsing category checks the page in a real browser. A scripted agent walk checks whether the task can be done. They disagree, and that is useful.
-- isitagentready.com only scans public sites. For `localhost`, the companion script `agent-ready-check.mjs` implements the published checks and level rules, and on 2 November 2026 it agreed with the real scanner on the level for six public sites.
+- A first look at your own access log, with the demos' log classifier, shows which kinds of visitor already come and what they get, before any grader result.
 - Lighthouse's `agent-accessibility-tree` audit checks the quality of what a page exposes, not what it is missing. The legacy page with no form and no real buttons passed it.
 - A structure-only agent completed 0 of 13 booking steps on the legacy page and 13 of 13 after the switch to semantic HTML: real links, a `<form>`, labelled inputs, a real `<button>` and content that is in the HTML from the start.
 - A robots.txt and a sitemap moved the server-side scan from Level 0 to Level 1. They also did that on the legacy page, where the agent still failed every step.
 - Three attributes on a form and three on its fields made a declarative WebMCP tool, `check_availability`. Chrome built the input schema from the form itself, and browsers without WebMCP ignore the attributes.
-- Start with read-only tools. Consequential actions like booking need confirmation and come later in the book.
 - Measure, change one layer, measure again, and record per-check deltas with pinned tool versions.
 
 [^ch02-1]: isitagentready.com, "Scan API" and MCP server, documented in https://isitagentready.com/llms-full.txt (retrieved 2 November 2026). Scan of https://salnikov.no on 2 November 2026 at 20:59 UTC, stored with the book's research data.

@@ -1,4 +1,5 @@
 {sample: true}
+
 # Preface
 
 In the autumn of 2026 I finished a book about one browser API. *Tools, Not Clicks* is about WebMCP, the proposal that lets a web page hand an AI agent a set of tools instead of making it click through the interface. Its first edition was tagged on 15 October 2026, and its second major version was released on 2 November 2026, because the specification had moved that much in between.[^pre-1]
@@ -19,11 +20,11 @@ You could ask whether it is too early for a book like this. Most of the standard
 
 The first reason is that agents became regular visitors. Cloudflare Radar, which sees a large share of the web's traffic, shows AI bots and crawlers as a steady part of it, and the big AI companies now document separate crawlers for training, for search and for fetching a page because a person asked a question about it.[^pre-3] Chapter 1 has the numbers. In simple words: if you run a public website, agents already visit it, whether or not you did anything for them.
 
-The second reason is that "agent-ready" became measurable. In April 2026 Cloudflare launched isitagentready.com, which scans a site for the files and headers agents look for. In May 2026 Lighthouse, the auditing tool built into Chrome, added an Agentic Browsing category that checks a page the way a browsing agent experiences it.[^pre-4] The two graders measure different things and sometimes disagree, but together they turned a vague idea into scores a team can track. This book uses both of them from Chapter 2 to Chapter 20.
+The second reason is that "agent-ready" became measurable. In April 2026 Cloudflare launched isitagentready.com, which scans a site for the files and headers agents look for. In May 2026 Lighthouse, the auditing tool built into Chrome, added an Agentic Browsing category that checks a page the way a browsing agent experiences it.[^pre-4] The two graders measure different things and sometimes disagree, but together they turned a vague idea into scores a team can track. This book uses both of them from Chapter 2 to Chapter 12.
 
 The third reason is that the platforms started moving for you. In 2026 a large e-commerce platform began shipping WebMCP tools and commerce protocol files on its stores by default, and CDNs and hosting providers added switches for agent verification, Markdown versions of pages and crawler controls.[^pre-5] When your platform can turn something on for you, the important skill is knowing what it does, whether you want it and how to check that it works. That is what this book is for.
 
-And yes, things will change. Chapter 20 is about exactly that: how each kind of standard evolves, how to read where it stands, how to change your own interfaces without breaking the agents that use them, and how to notice when something you depend on moves. Every claim in this book carries the date it was true and the source it came from, so you can check it again.
+And yes, things will change. Appendix B lists every standard in this book with its status and date and explains how to read where it stands, and Chapter 12 turns that into a habit for your team. Every claim in this book carries the date it was true and the source it came from, so you can check it again.
 
 ## Who this book is for
 
@@ -37,7 +38,7 @@ You do not need to know anything about AI to read this book. You need to know ho
 
 Everything in this book was tested in November 2026. The running example, Nordlys Cabins, is a small booking site that you can run on your own machine, and every chapter adds one layer to it with tests that pass. Every number has a source and a date. When the evidence is thin, I say so. When a vendor says a technique does nothing for its product, I say that too, even if the technique still helps elsewhere. And when I give an opinion, I tell you it is one.
 
-I also used the methods this book teaches on the book itself. Its web edition publishes Markdown versions of every page, an llms.txt, structured data and WebMCP tools, and Chapter 20 reports how it scores in both graders.
+I also used the methods this book teaches on the book itself. Its web edition publishes Markdown versions of every page, an llms.txt, structured data and WebMCP tools, and Chapter 12 reports how it scores in both graders.
 
 ## Thanks
 

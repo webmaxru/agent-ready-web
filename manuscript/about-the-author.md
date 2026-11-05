@@ -3,7 +3,7 @@
 
 Maxim Salnikov is a Senior Solution Engineer at Microsoft, focused on AI-native developer tools and platforms. He has more than two decades of experience as a developer. Before his current role he worked as a web front-end and full-stack developer and technical lead, and for years he wrote and spoke about Progressive Web Apps, service workers and Workbox. He is a Google Developer Expert in Web Technologies and a Microsoft MVP alumnus.
 
-His previous book, *Tools, Not Clicks: Building Agent-Ready Websites with WebMCP*, goes deep on the browser API that lets a web page offer tools to AI agents. Its web edition is free to read at https://webmcp.salnikov.no. *The Agent-Ready Web* is its wider companion, covering every layer of making a site work for agents.
+His previous book, *Tools, Not Clicks: Building Agent-Ready Websites with WebMCP*, goes deep on the browser API that lets a web page offer tools to AI agents. Its web edition is free to read at https://webmcp.salnikov.no. *Agent-Ready Websites in Action* is its wider companion, covering every layer of making a site work for agents.
 
 The agentic web is close to his daily work. He is a co-author of two pages of Chrome's official WebMCP documentation on developer.chrome.com: "Build your user's agentic workflows with WebMCP tools" and "WebMCP best practices". He is a member of the W3C Web Machine Learning Community Group, the group that incubates the WebMCP specification.
 

@@ -1,5 +1,5 @@
 {
-  "title": "The Agent-Ready Web",
+  "title": "Agent-Ready Websites in Action",
   "subtitle": "How to make your website work for AI agents, layer by layer",
   "author": "Maxim Salnikov",
   "author_url": "https://github.com/webmaxru",
@@ -8,8 +8,8 @@
     "https://www.linkedin.com/in/webmax/"
   ],
   "year": "2026",
-  "version": "1.0.0",
-  "edition": "First edition, November 2026",
+  "version": "2.0.0",
+  "edition": "November 2026",
   "checked_as_of": "November 2026",
   "tested_with": "Standards, specifications and tools checked as of {checked_as_of}",
   "language": "en",
@@ -20,7 +20,7 @@
     "© 2026 Maxim Salnikov. All rights reserved.",
     "No part of this book may be reproduced or transmitted in any form or by any means without the prior written permission of the author, except for brief quotations in reviews and articles.",
     "Demo code and examples are released under the MIT License: https://github.com/webmaxru/agent-ready-web-demos",
-    "The standards, APIs, tools and data in this book were checked as of {checked_as_of}, except where the text marks them as unverified. Many of them are drafts that change; check the cited sources for later changes.",
+    "The standards, APIs, tools and data in this book were checked as of {checked_as_of}. Many of them are drafts that change; check the cited sources for later changes.",
     "Product names are trademarks of their owners. The businesses, people and code in the book's running example (Nordlys Cabins) are fictional."
   ],
   "site_url": "https://agent-ready-web.salnikov.no",
@@ -32,8 +32,8 @@
   },
   "newsletter_url": "https://isainative.substack.com/subscribe",
   "contact_url": "https://www.linkedin.com/in/webmax/",
-  "file_stem": "The-Agent-Ready-Web-Maxim-Salnikov",
-  "html_zip_stem": "The-Agent-Ready-Web-HTML",
+  "file_stem": "Agent-Ready-Websites-in-Action-Maxim-Salnikov",
+  "html_zip_stem": "Agent-Ready-Websites-in-Action-HTML",
   "agent_ready": {
     "content_signal": "search=yes, ai-input=yes, ai-train=no",
     "training_crawlers": "follow-content-signal",
@@ -55,8 +55,7 @@
         "Applebot-Extended",
         "CCBot",
         "Bytespider",
-        "Amazonbot",
-        "meta-externalagent"
+        "Amazonbot"
       ]
     },
     "llms_full_txt": true,

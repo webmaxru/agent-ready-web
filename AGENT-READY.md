@@ -103,14 +103,14 @@ python3 tools/agentic_report.py lh.json
 ```
 
 
-## Measured on the v1.0.0 build (2 November 2026)
+## Measured locally (2 November 2026)
 
 Lighthouse 13.6.0, Agentic browsing category only, Chromium 156.0.8078.4 headless with `--enable-features=WebMCPTesting`, site served locally by `tools/serve.py` (the SWA headers and rewrites):
 
 | Page type | URL | Score |
 | --- | --- | --- |
 | home | `/` | 1.00 |
-| chapter | `/08-server-side-tools-with-mcp.html` | 1.00 |
+| chapter | `/08-server-side-tools-and-discovery.html` | 1.00 |
 | appendix | `/appendix-b-reference.html` | 1.00 |
 | about | `/about.html` | 1.00 |
 | part | `/part-3.html` | 1.00 |

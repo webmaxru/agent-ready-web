@@ -1,20 +1,9 @@
-# Chapter 3 editorial log: How agents see a page
+# Chapter 3 editorial log (v2)
 
-Writer W1, 2 November 2026. Method as Chapter 1.
-
-## Pass 1: voice draft
-- Structure: three views (with Table 3.1 of what vendors document), how the tree is built (real CDP node), semantic HTML first and ARIA second, forms, the 33 rules, the perception contract, stable layout, team checklist.
-- All measurements produced by the new chapter scripts (three-views.mjs, agent-axe.mjs) and the new layer's audit.
-
-## Pass 2: substantive edit
-- Comet row labelled as third-party analysis. Atlas quote labelled as a secondary quote of the OpenAI help page.
-- Live regions: no claim that agents use them (no source), stated as such.
-- Discovered and documented that axe reports aria-hidden-focus as "needs review", which Lighthouse ignores. Added it to the fixture test.
-- Discovered that the site CSP blocks axe injection, documented bypassCSP.
-- The perception contract passes labelled-controls on the legacy front end only because it has no controls in its HTML. Said so in the text instead of hiding it.
-- Removed an invented "80 pixels" example.
-- Added "Reading the tree like an agent", "Seeing your own pages" and "Patterns that break perception" for practitioners.
-
-## Pass 3: voice recheck and fidelity
-- Signature moves: "In simple words", "Please note:", "Bottomline:", "I bet", one ":)", six spaced em dashes, "Let's look".
-- Listings 3.1 to 3.3 byte-identical. Numbers compared with the validation file.
+- Sources: v1 ch3 (7,232 words), plus v1 ch2 (legacy page, 400 ms injection, clean form) and v1 ch1 "Two front ends" for the new rendering section.
+- Result: 7666 words (budget 7,300, range 6,570-7,665).
+- Figures kept: 3.1 -> 3.1, 3.2 -> 3.2, 3.3 -> 3.3. Listings kept: 3.1 -> 3.1, 3.2 -> 3.2, 3.3 -> 3.3. Tables 3.1 to 3.4 unchanged.
+- Cut: the legacy-snapshot walk-through in "Reading the tree like an agent" (folded into one sentence), part of the date-field granularity note, the ten-minute DevTools aside, the sentence after the snapshot test, the per-role bullet list in "What to take back to your team" (now one paragraph).
+- New: "Rendering for client-rendered apps" (~780 words: server-side rendering, hydration, no-JavaScript fallbacks), built from v1 ch3 #10, v1 ch2 #1, #2 and v1 ch3 #37. General engineering explanation only, no new numbers or vendor claims. Summary gains one bullet.
+- Cross-references re-pointed: Chapter 16 -> 10.
+- Unverified: nothing.
