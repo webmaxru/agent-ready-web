@@ -102,4 +102,4 @@ jobs:
             dist/*.epub
             dist/*.zip
             lh-*.json
-          retention-days: 14
+          retention-days: 3
