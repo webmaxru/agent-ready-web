@@ -73,10 +73,13 @@ No other secrets, variables or Azure credentials are used. The workflow uses onl
 `.github/workflows/deploy-swa.yml` builds the site and uploads it with `Azure/static-web-apps-deploy@v1` (pinned to a commit) on:
 
 - a push to `main` that changes `manuscript/`, `theme/`, `tools/`, `staticwebapp.config.json`, `infra/check_site.py` or `CHANGELOG.md`;
-- a published GitHub Release (it builds the release's tag);
+- a dispatch from the **Release** workflow with `ref` set to the new tag, after it publishes a stable version (a release published with the built-in token doesn't fire the `release` event, so Release starts the deploy explicitly and waits for it; see [`RELEASING.md`](RELEASING.md));
+- a GitHub Release published by hand (it builds the release's tag);
 - **Run workflow** in the Actions tab, optionally with a `ref`.
 
-Without the secret (a fork, a fresh clone), the workflow skips with a notice and stays green. Runs never overlap (concurrency group `swa-production`). The run summary shows the URL and the status codes of `/` and a missing page.
+Without the secret (a fork, a fresh clone, or this repository before the first `./infra/deploy.sh`), the workflow uploads nothing and stays green. Its run summary and a warning say **Web edition NOT deployed** and why. The Release workflow's deploy job reads that run and reports the same in its own summary: the GitHub Release is published, but the web edition is not. It never reports a deploy that didn't happen.
+
+**Until the owner sets this up, the web edition is not live.** `AZURE_STATIC_WEB_APPS_API_TOKEN` is not set, and `agent-ready-web.salnikov.no` has no DNS record. To fix it, run `./infra/deploy.sh` once as described above. It creates the Static Web App, stores the token and prints the app's URL. Then add the CNAME record and bind the domain as described in [CUSTOM-DOMAIN.md](CUSTOM-DOMAIN.md) (`--custom-domain agent-ready-web.salnikov.no`). Then deploy the latest release: **Actions → deploy-swa → Run workflow** with `ref` set to its tag. Runs never overlap (concurrency group `swa-production`). The run summary shows the URL and the status codes of `/` and a missing page.
 
 ## Rolling back
 
