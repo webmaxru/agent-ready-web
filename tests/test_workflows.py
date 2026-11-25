@@ -44,6 +44,14 @@ class Workflows(unittest.TestCase):
             self.assertRegex(text, r"timeout-minutes: \d+\n\s+working-directory: book\n\s+run: \|\n\s+timeout 420 pip"
                              if name == "release.yml" else r"timeout-minutes: 12")
 
+    def test_tags_come_from_the_checkout_not_an_unauthenticated_fetch(self):
+        # persist-credentials: false leaves no token for a later "git fetch" in this private
+        # repository; fetch-depth: 0 already fetches every tag.
+        for path in WORKFLOWS.glob("*.yml"):
+            text = path.read_text(encoding="utf-8")
+            if "persist-credentials: false" in text:
+                self.assertNotRegex(text, r"\bgit (-C \S+ )?fetch\b", path.name)
+
     def test_approval_signal_has_no_permissions(self):
         text = read("book-approval-signal.yml")
         self.assertEqual(re.search(r"^name: (.+)$", text, re.M).group(1), "Book approval signal")

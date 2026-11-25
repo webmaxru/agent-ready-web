@@ -103,7 +103,6 @@ jobs:
           BASE: ${{ needs.authorize.outputs.base }}
           HEAD_SHA: ${{ needs.authorize.outputs.head }}
         run: |
-          git -C book fetch --tags --force --quiet origin
           test "$(git -C book rev-parse HEAD)" = "$HEAD_SHA"
           python trusted/tools/validate_release.py change --root book --base-ref "$BASE" --head "$HEAD_SHA"
       - name: Manuscript lint (main's linter, approved head)

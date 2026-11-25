@@ -121,7 +121,6 @@ jobs:
           persist-credentials: false
       - name: Version, dated CHANGELOG section, tag and ancestry
         run: |
-          git -C book fetch --tags --force --quiet origin
           python trusted/tools/validate_release.py release --root book --tag "$TAG" --sha "$SHA" --allow-existing-tag
           python trusted/tools/validate_release.py notes --root book --tag "$TAG" --repo "$GITHUB_REPOSITORY" > release-notes.md
           cat release-notes.md
