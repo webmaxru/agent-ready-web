@@ -69,13 +69,13 @@ Any command takes `--manuscript DIR` to build another manuscript folder, for exa
 
 ## Editions and releases
 
-Every release is a Git tag `vX.Y.Z` with a GitHub Release carrying the PDF, the print PDF, the EPUB and the HTML edition (zip), all built from that tag, with the version's [`CHANGELOG.md`](CHANGELOG.md) section as its notes. Releases come only from merged code: merging a release pull request cuts the release (see [`RELEASING.md`](RELEASING.md)). The current version is in [`tools/book.json`](tools/book.json) and on the book's copyright page. The web edition shows the release history at https://agent-ready-web.salnikov.no/releases.html and as an Atom feed at `/releases.xml`.
+Every release is a Git tag `vX.Y.Z` with a GitHub Release carrying the PDF, the print PDF, the EPUB and the HTML edition (zip), all built from that tag, with the version's [`CHANGELOG.md`](CHANGELOG.md) section as its notes. Releases come only from an owner-approved content pull request: `/update-book` prepares the update, the pull request must pass **Book release preflight**, and when the owner approves it (or, on his own pull request, comments `/release-book <head sha>`), it is merged, tagged, released and deployed automatically (see [`RELEASING.md`](RELEASING.md)). The current version is in [`tools/book.json`](tools/book.json) and on the book's copyright page. The web edition shows the release history at https://agent-ready-web.salnikov.no/releases.html and as an Atom feed at `/releases.xml`.
 
 - **PDF**, 7 × 9.25 in, for reading and Leanpub.
 - **Print PDF**, 7.5 × 9.25 in, the paperback interior for KDP (7 × 9.25 is not a KDP trim size; the print variant keeps the text block, so the pagination stays the same).
 - **EPUB 3**, checked with EPUBCheck, for e-book stores.
-- **Web edition**, deployed to Azure Static Web Apps on every change to `main` and on every release.
-- [Book CI](.github/workflows/ci.yml) lints the manuscript, builds every edition, runs EPUBCheck and the Lighthouse agentic-browsing audit on every pull request; the built files are attached to the run.
+- **Web edition**, deployed to Azure Static Web Apps on every change to `main` and on every release, once the deployment token is set up ([`DEPLOY.md`](DEPLOY.md)). Until then, the release run says the web edition was not deployed.
+- [Book CI](.github/workflows/ci.yml) lints the manuscript, builds every edition, runs EPUBCheck, `check_site`, the Lighthouse agentic-browsing audit and the release checks on every pull request; its aggregate check is **Book release preflight**, and the built files are attached to the run.
 
 ## Publishing
 

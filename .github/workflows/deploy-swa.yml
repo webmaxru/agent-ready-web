@@ -44,8 +44,13 @@ jobs:
       - name: Skip until the Static Web App exists
         if: env.HAS_TOKEN != 'true'
         run: |
-          echo "::notice title=Web edition not deployed::Add the AZURE_STATIC_WEB_APPS_API_TOKEN repository secret (run ./infra/deploy.sh, see DEPLOY.md)."
-          echo "Web edition not deployed: the **AZURE_STATIC_WEB_APPS_API_TOKEN** repository secret is missing. Run \`./infra/deploy.sh\` (see DEPLOY.md)." >> "$GITHUB_STEP_SUMMARY"
+          echo "::warning title=Web edition NOT deployed::AZURE_STATIC_WEB_APPS_API_TOKEN is missing. Run ./infra/deploy.sh (see DEPLOY.md), then re-run this workflow with ref = the release tag."
+          {
+            echo "## Web edition NOT deployed"
+            echo
+            echo "Nothing was uploaded for \`$DEPLOY_REF\`: the **AZURE_STATIC_WEB_APPS_API_TOKEN** repository secret is missing."
+            echo "Run \`./infra/deploy.sh\` (see DEPLOY.md), then **Actions → deploy-swa → Run workflow** with ref = the release tag."
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Checkout ${{ env.DEPLOY_REF }}
         if: env.HAS_TOKEN == 'true'

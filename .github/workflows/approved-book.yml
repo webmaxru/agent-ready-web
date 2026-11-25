@@ -1,0 +1,134 @@
+# The approval controller: merges an owner-approved, content-only book update and starts its
+# release. All logic is tools/book_release.py from main; nothing from the pull request runs
+# with write access. See RELEASING.md.
+#
+#   authorize  find the PR and check it: owner approval of the exact head (or, on the owner's
+#              own PR, the comment "/release-book <head sha>"), same repository, base main, not
+#              a draft, mergeable, not behind main, content-only files, and "Book release
+#              preflight" green on that head
+#   preflight  re-run main's validators and lint against the exact approved head
+#   merge      re-check everything, squash-merge only if the head is still that SHA, then
+#              dispatch release.yml (a GITHUB_TOKEN merge starts no push workflows)
+#
+# Wake-ups: a review (via "Book approval signal"), a finished "Book CI" run, an owner comment,
+# a scan every 30 minutes (recovers missed events), or Run workflow with a PR number.
+# The repository is on the free plan without branch protection: a manual merge bypasses this.
+name: Release approved book
+
+on:
+  workflow_run:
+    workflows: ["Book approval signal", "Book CI"]
+    types: [completed]
+  issue_comment:
+    types: [created]
+  schedule:
+    - cron: "17,47 * * * *"
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: "Content pull request number to re-evaluate"
+        required: true
+
+permissions: {}
+
+concurrency:
+  group: approved-book
+  cancel-in-progress: false
+
+jobs:
+  authorize:
+    if: >-
+      github.event_name != 'issue_comment' ||
+      (github.event.issue.pull_request &&
+       github.event.comment.user.login == 'webmaxru' &&
+       startsWith(github.event.comment.body, '/release-book '))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+      actions: read
+    outputs:
+      eligible: ${{ steps.gate.outputs.eligible }}
+      pr: ${{ steps.gate.outputs.pr }}
+      head: ${{ steps.gate.outputs.head }}
+      base: ${{ steps.gate.outputs.base }}
+      tag: ${{ steps.gate.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Check owner approval, PR scope and the preflight check
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python tools/book_release.py inspect
+
+  preflight:
+    needs: authorize
+    if: needs.authorize.outputs.eligible == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout the trusted validators (main)
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          path: trusted
+          persist-credentials: false
+      - name: Checkout the exact approved head
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.authorize.outputs.head }}
+          path: book
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Install the lint dependencies
+        timeout-minutes: 8
+        run: timeout 420 pip install -r trusted/tools/requirements.txt
+      - name: Version, CHANGELOG, tag and evidence gate (main's validator, approved head)
+        env:
+          BASE: ${{ needs.authorize.outputs.base }}
+          HEAD_SHA: ${{ needs.authorize.outputs.head }}
+        run: |
+          test "$(git -C book rev-parse HEAD)" = "$HEAD_SHA"
+          python trusted/tools/validate_release.py change --root book --base-ref "$BASE" --head "$HEAD_SHA"
+      - name: Manuscript lint (main's linter, approved head)
+        run: python trusted/tools/lint_manuscript.py --manuscript book/manuscript
+
+  merge:
+    needs: [authorize, preflight]
+    if: needs.authorize.outputs.eligible == 'true' && needs.preflight.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Re-check, merge the exact head, then dispatch the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ needs.authorize.outputs.pr }}
+          HEAD_SHA: ${{ needs.authorize.outputs.head }}
+          BASE: ${{ needs.authorize.outputs.base }}
+        run: python tools/book_release.py merge --pr "$PR" --head "$HEAD_SHA" --base "$BASE"

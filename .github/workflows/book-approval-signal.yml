@@ -1,0 +1,17 @@
+# A review on a pull request runs this no-op with no permissions. Its completion wakes
+# approved-book.yml (workflow_run), which checks the approval itself from trusted main code.
+# Nothing here reads or trusts the pull request.
+name: Book approval signal
+
+on:
+  pull_request_review:
+    types: [submitted, dismissed]
+
+permissions: {}
+
+jobs:
+  signal:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - run: echo "Approval is checked independently by the trusted controller (approved-book.yml)."

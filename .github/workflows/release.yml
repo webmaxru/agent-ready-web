@@ -1,142 +1,146 @@
-# Cuts a GitHub Release from merged code only, with the PDF, the print PDF (7.5 x 9.25 in, KDP),
-# the EPUB, the HTML edition (zip) and their checksums, and the version's CHANGELOG.md section as
-# the notes. Then it asks the deploy-swa workflow to put that release on the web edition.
+# Publishes one GitHub Release from an owner-approved, merged content update: the PDF, the print
+# PDF (7.5 x 9.25 in, KDP), the EPUB, the HTML edition (zip) and SHA256SUMS.txt, with the
+# version's CHANGELOG.md section as the notes. Then it deploys that release to the web edition.
 # See RELEASING.md.
 #
-# Three ways in, all ending at a tag on a commit that is on the default branch:
-#   1. Merge a release pull request into main: a PR whose branch starts with "release/" or that
-#      carries the label "release". The workflow reads the version from tools/book.json, tags the
-#      merge commit vX.Y.Z and publishes. (The usual way.)
-#   2. Push a vX.Y.Z tag yourself. The tagged commit must already be on main.
-#   3. Actions -> Release -> Run workflow, tag = an existing tag (to rebuild its files).
+# Started only by workflow_dispatch:
+#   - by approved-book.yml after it merges an approved pull request (pr, head_sha, base_sha,
+#     merge_sha and tag), or
+#   - by hand, for recovery: Run workflow with the PR number (and tag), or with only the tag of
+#     an existing release. The same provenance checks run either way.
+#
+#   plan     read-only: the merge is the approved PR's squash on main, its tree is the approved
+#            head, the tag matches tools/book.json, the previous release is an ancestor, and an
+#            existing tag points at the merge. A published release with every file is a no-op.
+#   build    every edition from the exact merge commit, before any tag exists
+#   publish  annotated tag at the merge (never moved), draft release, upload, verify, publish.
+#            Only the highest stable version is marked Latest. Published files are never
+#            replaced: a fix is a new patch version.
+#   deploy   dispatch deploy-swa.yml with ref = the tag and report whether the web edition went
+#            live (it is skipped while AZURE_STATIC_WEB_APPS_API_TOKEN is missing; see DEPLOY.md)
+#
+# Merging a release/ branch, the "release" label and pushing a tag no longer publish anything.
 # Uses only the built-in GITHUB_TOKEN.
 name: Release
 
 on:
-  pull_request:
-    types: [closed]
-    branches: [main]
-  push:
-    tags:
-      - "v[0-9]+.[0-9]+.[0-9]+"
-      - "v[0-9]+.[0-9]+.[0-9]+-*"
   workflow_dispatch:
     inputs:
+      pr:
+        description: "Approved, merged pull request number (empty = find it from the tag)"
+        required: false
+        default: ""
+      head_sha:
+        description: "Approved head SHA (optional; checked when given)"
+        required: false
+        default: ""
+      base_sha:
+        description: "Base SHA the head was approved against (optional; checked when given)"
+        required: false
+        default: ""
+      merge_sha:
+        description: "Squash merge commit on main (optional; checked when given)"
+        required: false
+        default: ""
       tag:
-        description: "Existing tag to build and publish (for example v1.0.0)"
-        required: true
+        description: "vX.Y.Z (optional with a PR; read from tools/book.json at the merge)"
+        required: false
+        default: ""
 
-permissions:
-  contents: read
+permissions: {}
 
 concurrency:
-  group: release-${{ github.event.pull_request.number || inputs.tag || github.ref_name }}
+  group: book-publish
   cancel-in-progress: false
 
 jobs:
-  resolve:
-    name: Resolve the tag (merged code only)
-    if: >-
-      github.event_name != 'pull_request' ||
-      (github.event.pull_request.merged == true &&
-       (startsWith(github.event.pull_request.head.ref, 'release/') ||
-        contains(github.event.pull_request.labels.*.name, 'release')))
+  plan:
+    name: Check provenance (read-only)
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     permissions:
-      contents: write
+      contents: read
+      pull-requests: read
+      actions: read
     outputs:
-      tag: ${{ steps.tag.outputs.tag }}
+      merge_sha: ${{ steps.plan.outputs.merge_sha }}
+      tag: ${{ steps.plan.outputs.tag }}
+      version: ${{ steps.plan.outputs.version }}
+      prerelease: ${{ steps.plan.outputs.prerelease }}
+      recovery: ${{ steps.plan.outputs.recovery }}
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.pull_request.merge_commit_sha || inputs.tag || github.ref }}
-          fetch-depth: 0
-      - name: Tag the merge commit, or check that the tag is on the default branch
-        id: tag
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Release plan
+        id: plan
         env:
-          EVENT: ${{ github.event_name }}
-          DEFAULT: ${{ github.event.repository.default_branch }}
-          INPUT_TAG: ${{ inputs.tag }}
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ inputs.pr }}
+          HEAD_SHA: ${{ inputs.head_sha }}
+          BASE_SHA: ${{ inputs.base_sha }}
+          MERGE_SHA: ${{ inputs.merge_sha }}
+          TAG: ${{ inputs.tag }}
         run: |
-          git fetch origin "$DEFAULT" --quiet
-          if [ "$EVENT" = "pull_request" ]; then
-            v="$(python3 -c 'import json; print(json.load(open("tools/book.json"))["version"])')"
-            tag="v$v"
-            if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
-              echo "::error::$tag already exists. Bump \"version\" in tools/book.json and CHANGELOG.md in the release pull request."; exit 1
-            fi
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git tag -a "$tag" -m "$tag" HEAD
-            git push origin "refs/tags/$tag"
-            echo "Tagged the merge commit $(git rev-parse --short HEAD) as $tag."
-          else
-            tag="${INPUT_TAG:-$GITHUB_REF_NAME}"
-            if ! git merge-base --is-ancestor "$(git rev-list -n1 "refs/tags/$tag")" "origin/$DEFAULT"; then
-              echo "::error::$tag is not on $DEFAULT. Releases come only from merged code: merge first, then tag."; exit 1
-            fi
-          fi
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          args=()
+          [ -n "$PR" ] && args+=(--pr "$PR")
+          python tools/book_release.py release-plan "${args[@]}" --head "$HEAD_SHA" --base "$BASE_SHA" \
+            --merge-sha "$MERGE_SHA" --tag "$TAG"
 
   build:
-    name: Build the editions
-    needs: resolve
+    name: Build the editions (exact merge commit, before tagging)
+    needs: plan
+    if: needs.plan.outputs.recovery != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 45
+    permissions:
+      contents: read
     defaults:
       run:
         shell: bash
     env:
-      TAG: ${{ needs.resolve.outputs.tag }}
-    outputs:
-      version: ${{ steps.version.outputs.version }}
-      prerelease: ${{ steps.version.outputs.prerelease }}
+      TAG: ${{ needs.plan.outputs.tag }}
+      SHA: ${{ needs.plan.outputs.merge_sha }}
     steps:
-      - uses: actions/checkout@v7
+      - name: Checkout the trusted release tools (main)
+        uses: actions/checkout@v7
         with:
-          ref: refs/tags/${{ needs.resolve.outputs.tag }}
+          ref: main
+          path: trusted
+          persist-credentials: false
+      - name: Checkout the merge commit
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.plan.outputs.merge_sha }}
+          path: book
           fetch-depth: 0
-      - name: Version from the tag
-        id: version
+          persist-credentials: false
+      - name: Version, dated CHANGELOG section, tag and ancestry
         run: |
-          case "$TAG" in v[0-9]*.[0-9]*.[0-9]*) ;; *) echo "::error::'$TAG' is not a vX.Y.Z tag"; exit 1;; esac
-          version="${TAG#v}"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          case "$version" in *-*) echo "prerelease=true" >> "$GITHUB_OUTPUT";; *) echo "prerelease=false" >> "$GITHUB_OUTPUT";; esac
-          v_json="$(python3 -c 'import json; print(json.load(open("tools/book.json")).get("version", ""))')"
-          if [ "$v_json" != "$version" ]; then
-            echo "::error file=tools/book.json::version is $v_json but the tag is $TAG"; exit 1
-          fi
-      - name: Release notes from CHANGELOG.md (default branch)
-        run: |
-          git show "origin/${{ github.event.repository.default_branch }}:CHANGELOG.md" > /tmp/CHANGELOG.md
-          python3 - "${{ steps.version.outputs.version }}" > release-notes.md <<'PY'
-          import os, re, sys
-          v = sys.argv[1]
-          text = open("/tmp/CHANGELOG.md", encoding="utf-8").read()
-          m = re.search(rf"^## \[{re.escape(v)}\]\s*[-–—]?\s*(.*?)\s*\n(.*?)(?=^## \[|\Z)", text, re.M | re.S)
-          if not m:
-              sys.exit(f"CHANGELOG.md has no '## [{v}]' section")
-          if not re.match(r"\d{4}-\d{2}-\d{2}$", m.group(1)):
-              sys.exit(f"CHANGELOG.md: '## [{v}]' has no release date (found '{m.group(1)}'); set it to YYYY-MM-DD before releasing")
-          body = re.sub(r"(?m)^\[[^\]]+\]: \S+\s*$", "", m.group(2))
-          base = f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/blob/{os.environ['TAG']}/"
-          body = re.sub(r"\]\((?!https?:|#|mailto:)([^)]+)\)", lambda mm: "](" + base + mm.group(1) + ")", body)
-          print(body.strip())
-          PY
+          python trusted/tools/validate_release.py release --root book --tag "$TAG" --sha "$SHA" --allow-existing-tag
+          python trusted/tools/validate_release.py notes --root book --tag "$TAG" --repo "$GITHUB_REPOSITORY" > release-notes.md
           cat release-notes.md
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: Install the build tools
+        timeout-minutes: 12
+        working-directory: book
         run: |
-          pip install -r tools/requirements.txt
-          python -m playwright install --with-deps chromium
+          timeout 420 pip install -r tools/requirements.txt
+          timeout 300 python -m playwright install chromium
       - name: Manuscript lint
+        working-directory: book
         run: python tools/lint_manuscript.py
       - name: Build the web edition (zip), the EPUB, the PDF and the print PDF
+        timeout-minutes: 25
+        working-directory: book
         env:
-          BOOK_VERSION: ${{ steps.version.outputs.version }}
+          BOOK_VERSION: ${{ needs.plan.outputs.version }}
         run: |
           python tools/build.py all 2>&1 | tee build.log
           if grep -q '^warning:' build.log; then echo "::error::the build printed warnings"; exit 1; fi
@@ -146,6 +150,8 @@ jobs:
           distribution: temurin
           java-version: "21"
       - name: EPUBCheck
+        timeout-minutes: 8
+        working-directory: book
         run: |
           curl -sSL -o /tmp/epubcheck.zip https://github.com/w3c/epubcheck/releases/download/v5.2.1/epubcheck-5.2.1.zip
           unzip -q /tmp/epubcheck.zip -d /tmp
@@ -153,8 +159,9 @@ jobs:
       - name: Collect the release files and checksums
         run: |
           mkdir release
-          cp dist/*.pdf dist/*.epub dist/*.zip release/
+          cp book/dist/*.pdf book/dist/*.epub book/dist/*.zip release/
           (cd release && sha256sum -- * > SHA256SUMS.txt && cat SHA256SUMS.txt)
+          ls -l release
       - uses: actions/upload-artifact@v4
         with:
           name: editions-${{ env.TAG }}
@@ -163,58 +170,74 @@ jobs:
           retention-days: 7
       - uses: actions/upload-artifact@v4
         with:
-          name: release-notes
+          name: release-notes-${{ env.TAG }}
           path: release-notes.md
+          if-no-files-found: error
           retention-days: 7
 
   publish:
-    name: Publish the GitHub Release
-    needs: [resolve, build]
+    name: Tag and publish the GitHub Release
+    needs: [plan, build]
+    if: needs.plan.outputs.recovery != 'true' && needs.build.result == 'success'
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     permissions:
       contents: write
-      actions: write
+      pull-requests: read
+      actions: read
     env:
-      TAG: ${{ needs.resolve.outputs.tag }}
+      TAG: ${{ needs.plan.outputs.tag }}
+      SHA: ${{ needs.plan.outputs.merge_sha }}
     steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          path: trusted
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
       - uses: actions/download-artifact@v4
         with:
           name: editions-${{ env.TAG }}
           path: release
       - uses: actions/download-artifact@v4
         with:
-          name: release-notes
-      - name: Create or update the release
+          name: release-notes-${{ env.TAG }}
+      - name: Re-check provenance (nothing changed since the plan)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ inputs.pr }}
+        run: |
+          args=()
+          [ -n "$PR" ] && args+=(--pr "$PR")
+          python trusted/tools/book_release.py release-plan "${args[@]}" --merge-sha "$SHA" --tag "$TAG" > plan.txt
+          cat plan.txt
+          grep -qx 'recovery=false' plan.txt || { echo "::error::$TAG was published meanwhile; nothing to do"; exit 1; }
+      - name: Annotated tag, draft, upload, verify, publish
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          PRE: ${{ needs.build.outputs.prerelease }}
-        run: |
-          title="$TAG"
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release edit "$TAG" --title "$title" --notes-file release-notes.md
-            gh release upload "$TAG" release/* --clobber
-          else
-            flags=(--verify-tag --title "$title" --notes-file release-notes.md)
-            if [ "$PRE" = "true" ]; then flags+=(--prerelease); fi
-            # Only the highest stable version is marked "Latest", so rebuilding an old tag
-            # (or publishing it late) doesn't take the label from a newer one.
-            newest="$(gh api "repos/$GH_REPO/tags" --paginate --jq '.[].name' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)"
-            if [ "$PRE" != "true" ] && [ "$TAG" = "$newest" ]; then flags+=(--latest); else flags+=(--latest=false); fi
-            gh release create "$TAG" "${flags[@]}" release/*
-          fi
-          gh release view "$TAG" --json url,assets --jq '.url, (.assets[] | "  \(.name)  \(.size) bytes")'
-      # A release created with GITHUB_TOKEN does not start other workflows ("release: published"
-      # never fires for it), but workflow_dispatch does. So the web edition is deployed from here.
-      - name: Deploy this release to the web edition
-        if: needs.build.outputs.prerelease == 'false'
+        run: python trusted/tools/book_release.py publish --tag "$TAG" --merge-sha "$SHA" --assets release --notes release-notes.md
+
+  deploy:
+    name: Deploy the web edition
+    needs: [plan, publish]
+    if: always() && needs.plan.result == 'success' && (needs.publish.result == 'success' || needs.plan.outputs.recovery == 'true')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Dispatch deploy-swa for the tag and report the outcome
         env:
           GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-        run: |
-          if gh workflow view deploy-swa.yml >/dev/null 2>&1; then
-            gh workflow run deploy-swa.yml --ref "${{ github.event.repository.default_branch }}" -f ref="$TAG"
-            echo "Asked deploy-swa to deploy $TAG."
-          else
-            echo "No deploy-swa workflow in this repository; the web edition is not deployed by the release."
-          fi
+        run: python tools/book_release.py deploy --tag "${{ needs.plan.outputs.tag }}"
