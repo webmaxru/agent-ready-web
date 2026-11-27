@@ -46,10 +46,11 @@ def completed(run):
     return run["status"] == "completed" and run["conclusion"] == "success"
 
 
-def preview_identity(api, run, artifact):
+def preview_identity(api, run, artifact, *, attempt=None):
+    attempt = run["run_attempt"] if attempt is None else attempt
     for prefix in ("refs/heads/", "refs/tags/"):
         ref = prefix + run["head_branch"]
-        if artifact["name"] == preview_name(api.repo, ref, run["id"], run["run_attempt"]):
+        if artifact["name"] == preview_name(api.repo, ref, run["id"], attempt):
             return ref
     return None
 
@@ -93,8 +94,9 @@ def cleanup_preview(api, run_id):
             continue
         old_id, attempt = map(int, match.groups())
         old = producer(api, old_id, "ci.yml", "workflow_dispatch")
-        if (old_id == run_id or old_id >= run_id or not completed(old)
-                or old["run_attempt"] != attempt or preview_identity(api, old, artifact) != ref
+        if ((old_id, attempt) >= (run_id, run["run_attempt"]) or not completed(old)
+                or attempt > old["run_attempt"]
+                or preview_identity(api, old, artifact, attempt=attempt) != ref
                 or not artifact_matches(artifact, old)
                 or artifact["created_at"] >= replacement["created_at"]):
             continue

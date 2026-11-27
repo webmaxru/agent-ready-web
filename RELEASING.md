@@ -79,9 +79,10 @@ names remain distinct), plus producing run ID and attempt. A separate `workflow_
 cleanup executes only trusted `main` tooling with narrowly scoped Actions write
 permission; it never checks out or executes the preview source. It identifies the
 replacement's actual upload artifact ID from that producing run, verifies the successful
-upload step and run metadata, and deletes only older matching previews. Cleanup is
+upload step and run metadata, and deletes only older matching previews, including
+superseded attempts in the same or older completed runs. Cleanup is
 serialized per source name without cancelling a running cleanup, rechecks producers
-before deletion, and preserves newer uploads, the replacement, active/retried runs,
+before deletion, and preserves newer uploads, the replacement, active/rerunning producers,
 other refs/workflows, diagnostics and release staging. Overlapping active previews
 can temporarily coexist until the next successful preview cleanup or one-day expiry.
 Failed uploads never remove the previous preview. Missing or contradictory identity,

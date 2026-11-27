@@ -111,12 +111,55 @@ class Previews(unittest.TestCase):
         self.assertNotIn(13, self.api.deleted)
 
     def test_active_producer_and_rerun_are_preserved(self):
-        for values in ({"status": "in_progress"}, {"run_attempt": 2}, {"conclusion": "failure"}):
+        for values in ({"status": "in_progress"}, {"run_attempt": 2, "status": "in_progress"},
+                       {"conclusion": "failure"}):
             with self.subTest(values=values):
                 self.api = API()
                 self.api.runs[1].update(values)
                 storage.cleanup_preview(self.api, 2)
                 self.assertEqual(self.api.deleted, [])
+
+    def test_completed_same_run_removes_only_superseded_attempts(self):
+        previous = artifact(201, self.api.runs[2], created_at="2026-11-02T12:00:00Z")
+        self.api.runs[2]["run_attempt"] = 2
+        replacement = artifact(202, self.api.runs[2], created_at="2026-11-02T13:00:00Z")
+        newer = artifact(203, dict(self.api.runs[2], run_attempt=3),
+                         created_at="2026-11-02T14:00:00Z")
+        unrelated = artifact(204, self.api.runs[2], name="audit-2-1")
+        self.api.artifacts = [previous, replacement, newer, unrelated]
+        storage.cleanup_preview(self.api, 2)
+        self.assertEqual(self.api.deleted, [201])
+        self.assertEqual([a["id"] for a in self.api.artifacts], [202, 203, 204])
+
+    def test_completed_older_run_removes_all_superseded_attempts(self):
+        previous = artifact(101, self.api.runs[1])
+        self.api.runs[1]["run_attempt"] = 2
+        latest = artifact(102, self.api.runs[1])
+        self.api.artifacts = [previous, latest, self.api.artifacts[1], self.api.artifacts[2]]
+        storage.cleanup_preview(self.api, 2)
+        self.assertEqual(self.api.deleted, [101, 102])
+        self.assertEqual([a["id"] for a in self.api.artifacts], [12, 13])
+
+    def test_active_rerun_preserves_every_previous_attempt(self):
+        previous = artifact(101, self.api.runs[1])
+        latest = artifact(102, dict(self.api.runs[1], run_attempt=2))
+        self.api.runs[1].update(run_attempt=3, status="in_progress", conclusion=None)
+        self.api.artifacts = [previous, latest, self.api.artifacts[1]]
+        storage.cleanup_preview(self.api, 2)
+        self.assertEqual(self.api.deleted, [])
+
+    def test_same_run_rerun_started_before_delete_preserves_previous_attempt(self):
+        previous = artifact(201, self.api.runs[2], created_at="2026-11-02T12:00:00Z")
+        self.api.runs[2]["run_attempt"] = 2
+        replacement = artifact(202, self.api.runs[2], created_at="2026-11-02T13:00:00Z")
+        self.api.artifacts = [previous, replacement]
+
+        def hook(method, path):
+            if path == "actions/artifacts/202":
+                self.api.runs[2].update(run_attempt=3, status="in_progress", conclusion=None)
+        self.api.hook = hook
+        storage.cleanup_preview(self.api, 2)
+        self.assertEqual(self.api.deleted, [])
 
     def test_producer_is_rechecked_immediately_before_delete(self):
         reads = 0
