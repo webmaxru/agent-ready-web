@@ -16,8 +16,8 @@
 #   publish  annotated tag at the merge (never moved), draft release, upload, verify, publish.
 #            Only the highest stable version is marked Latest. Published files are never
 #            replaced: a fix is a new patch version.
-#   deploy   after a new publication, dispatch deploy-swa.yml with ref = the tag and report whether the web edition went
-#            live (it is skipped while AZURE_STATIC_WEB_APPS_API_TOKEN is missing; see DEPLOY.md)
+#   deploy   after a new highest stable publication, dispatch deploy-swa.yml for its tag.
+#            Require that run's upload and smoke test; missing credentials fail delivery.
 #
 # Merging a release/ branch, the "release" label and pushing a tag no longer publish anything.
 # Uses only the built-in GITHUB_TOKEN.
@@ -182,6 +182,8 @@ jobs:
     if: github.ref == 'refs/heads/main' && needs.plan.outputs.recovery != 'true' && needs.build.result == 'success'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    outputs:
+      published: ${{ steps.publish.outputs.published }}
     permissions:
       contents: write
       pull-requests: read
@@ -216,6 +218,7 @@ jobs:
           cat plan.txt
           grep -qx 'recovery=false' plan.txt || { echo "::error::$TAG was published meanwhile; nothing to do"; exit 1; }
       - name: Annotated tag, draft, upload, verify, publish
+        id: publish
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -224,7 +227,7 @@ jobs:
   deploy:
     name: Deploy the web edition
     needs: [plan, publish]
-    if: always() && github.ref == 'refs/heads/main' && needs.plan.result == 'success' && needs.publish.result == 'success'
+    if: github.ref == 'refs/heads/main' && needs.publish.outputs.published == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:

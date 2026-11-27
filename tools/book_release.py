@@ -36,6 +36,7 @@ CHECK_JOB = "Book release preflight"
 RELEASE_WORKFLOW = "release.yml"
 DEPLOY_WORKFLOW = "deploy-swa.yml"
 DEPLOY_STEP = "Deploy to Azure Static Web Apps (production)"
+SMOKE_STEP = "Smoke test"
 SKIP_STEP = "Skip until the Static Web App exists"
 
 
@@ -53,14 +54,14 @@ class GitHub:
         self.token = os.environ["GH_TOKEN"]
         self.api = os.environ.get("GITHUB_API_URL", "https://api.github.com").rstrip("/")
 
-    def request(self, method, path, data=None, *, missing=False):
+    def request(self, method, path, data=None, *, missing=False, api_version="2022-11-28"):
         body = json.dumps(data).encode() if data is not None else None
         request = urllib.request.Request(
             f"{self.api}/repos/{self.repo}/{path}", body, method=method,
             headers={"Authorization": f"Bearer {self.token}",
                      "Accept": "application/vnd.github+json",
                      "Content-Type": "application/json",
-                     "X-GitHub-Api-Version": "2022-11-28"},
+                     "X-GitHub-Api-Version": api_version},
         )
         try:
             with urllib.request.urlopen(request, timeout=60) as response:
@@ -149,6 +150,11 @@ def find_release(api, tag):
     if len(matches) > 1:
         raise GateError(f"more than one release uses {tag}; resolve it by hand")
     return matches[0] if matches else None
+
+
+def published_stable_tags(api):
+    return [r["tag_name"] for r in api.pages("releases") if not r["draft"] and not r["prerelease"]
+            and policy.TAG_RE.fullmatch(r["tag_name"]) and not policy.is_prerelease(r["tag_name"][1:])]
 
 
 # ---------------------------------------------------------------- approval
@@ -439,12 +445,12 @@ def publish(api, tag, sha, folder, notes):
     plan = release_plan(api, tag=tag, merge_sha=sha)
     if plan["recovery"] == "true":
         summary(f"{tag} was already published with every edition; left unchanged.")
+        output({"published": "false"})
         return
     files = check_files(tag, folder)
     if not os.path.isfile(notes) or not os.path.getsize(notes):
         raise GateError("missing release notes")
-    published = [r["tag_name"] for r in api.pages("releases") if not r["draft"] and not r["prerelease"]]
-    latest = policy.is_newest_stable(version, published)
+    latest = policy.is_newest_stable(version, published_stable_tags(api))
     pre = ["--prerelease"] if policy.is_prerelease(version) else []
     obj = api.request("POST", "git/tags", {"tag": tag, "message": tag, "object": sha, "type": "commit"})
     api.request("POST", "git/refs", {"ref": f"refs/tags/{tag}", "sha": obj["sha"]})
@@ -461,6 +467,7 @@ def publish(api, tag, sha, folder, notes):
     gh("release", "edit", tag, "--draft=false", f"--latest={'true' if latest else 'false'}", *pre)
     summary(f"Published {tag} at `{sha[:12]}` with {len(files)} files"
             f"{' (Latest)' if latest else ''}{' as a pre-release' if pre else ''}.")
+    output({"published": "true"})
 
 
 # ---------------------------------------------------------------- deploy
@@ -468,35 +475,32 @@ def publish(api, tag, sha, folder, notes):
 def published_source(api, event, root):
     """Resolve production to an immutable SHA; compare content with main's trusted policy."""
     kind = event.get("event_name")
-    releases = [r for r in api.pages("releases") if not r["draft"] and not r["prerelease"]
-                and policy.TAG_RE.fullmatch(r["tag_name"])
-                and not policy.is_prerelease(r["tag_name"][1:])]
+    tags = published_stable_tags(api)
     if kind == "push":
         if event.get("ref") != "refs/heads/main":
             raise GateError("production push must target main")
-        tag = policy.latest_stable([r["tag_name"] for r in releases])
+        tag = policy.latest_stable(tags)
         if not tag:
             summary("No published stable edition; production deploy skipped.")
             output({"eligible": "false"})
             return
         target = full_sha(event.get("after"))
-    elif kind in {"workflow_dispatch", "release"}:
-        ref = ((event.get("inputs") or {}).get("ref") if kind == "workflow_dispatch"
-               else (event.get("release") or {}).get("tag_name"))
-        if kind == "release" and (event["release"].get("prerelease") or event["release"].get("draft")):
-            summary("Pre-release or draft; production deploy skipped.")
-            output({"eligible": "false"})
-            return
+    elif kind == "workflow_dispatch":
+        inputs = event.get("inputs") or {}
+        ref = inputs.get("ref")
         if isinstance(ref, str) and policy.TAG_RE.fullmatch(ref):
             tag = ref
         elif isinstance(ref, str) and policy.SHA_RE.fullmatch(ref):
-            matches = [r["tag_name"] for r in releases
-                       if peel(api, api.request("GET", f"git/ref/tags/{r['tag_name']}")) == ref]
+            matches = [t for t in tags if peel(api, api.request("GET", f"git/ref/tags/{t}")) == ref]
             tag = policy.latest_stable(matches)
         else:
             raise GateError("give a published stable release tag or full SHA, never a branch")
-        if not tag or tag not in {r["tag_name"] for r in releases}:
+        if tag not in tags:
             raise GateError(f"{ref} is not a published stable release")
+        if inputs.get("latest_only") in ("true", True) and tag != policy.latest_stable(tags):
+            summary(f"{tag} was superseded before deployment; production left unchanged.")
+            output({"eligible": "false"})
+            return
         target = None
     else:
         raise GateError("unsupported production deploy event")
@@ -516,57 +520,63 @@ def published_source(api, event, root):
     output({"eligible": "true", "sha": target or released, "tag": tag})
 
 
-def _when(value):
-    return datetime.datetime.fromisoformat(value.replace("Z", "+00:00"))
-
-
 def deploy(api, tag, *, timeout=1500, interval=15):
     version = policy.tag_version(tag)
     if policy.is_prerelease(version):
         summary(f"## Web edition not deployed\n\n{tag} is a pre-release; the web edition keeps the latest stable release.")
         return 0
+    tags = published_stable_tags(api)
+    if tag not in tags:
+        raise GateError(f"{tag} is not a published stable release; nothing dispatched")
+    latest = policy.latest_stable(tags)
+    if tag != latest:
+        summary(f"## Web edition not deployed\n\n{tag} is older than {latest}; production left unchanged.")
+        return 0
     if not api.request("GET", f"actions/workflows/{DEPLOY_WORKFLOW}", missing=True):
         summary(f"## Web edition NOT deployed\n\nThere is no {DEPLOY_WORKFLOW} workflow.")
         print(f"::warning title=Web edition not deployed::no {DEPLOY_WORKFLOW} workflow")
-        return 0
-    started = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(seconds=60)
-    api.request("POST", f"actions/workflows/{DEPLOY_WORKFLOW}/dispatches",
-                {"ref": "main", "inputs": {"ref": tag}})
+        return 1
+    receipt = api.request("POST", f"actions/workflows/{DEPLOY_WORKFLOW}/dispatches",
+                          {"ref": "main", "inputs": {"ref": tag, "latest_only": "true"}},
+                          api_version="2026-03-10")
+    run_id = receipt.get("workflow_run_id") if isinstance(receipt, dict) else None
+    if type(run_id) is not int or run_id <= 0:
+        summary(f"## Web edition: deploy not confirmed\n\nNo run ID returned for {tag}; "
+                "inspect Actions before retrying. No second dispatch was sent.")
+        return 1
     deadline = time.monotonic() + timeout
-    run = None
     while time.monotonic() < deadline:
-        runs = api.request("GET", f"actions/workflows/{DEPLOY_WORKFLOW}/runs?event=workflow_dispatch&per_page=20")
-        fresh = [r for r in runs["workflow_runs"] if _when(r["created_at"]) >= started]
-        run = max(fresh, key=lambda r: r["id"], default=None)
+        run = api.request("GET", f"actions/runs/{run_id}", missing=True)
+        if run and run["id"] != run_id:
+            raise GateError(f"deploy not confirmed: expected run {run_id}, got {run['id']}")
         if run and run["status"] == "completed":
             break
         time.sleep(interval)
-    if not run or run["status"] != "completed":
-        summary(f"## Web edition: deploy not confirmed\n\n{DEPLOY_WORKFLOW} did not finish in time"
-                f"{': ' + run['html_url'] if run else ''}. Check it before announcing the release.")
-        print("::warning title=Web edition not confirmed::the deploy run did not finish in time")
+    else:
+        summary(f"## Web edition: deploy not confirmed\n\nRun {run_id} did not finish in time. "
+                "Inspect it before retrying.")
         return 1
-    steps = {s["name"]: s.get("conclusion") for job in
-             api.request("GET", f"actions/runs/{run['id']}/jobs?per_page=100")["jobs"]
-             for s in job.get("steps", [])}
     if run["conclusion"] != "success":
         summary(f"## Web edition NOT deployed\n\nThe deploy of {tag} failed: {run['html_url']}")
         print(f"::error title=Web edition not deployed::the deploy run failed: {run['html_url']}")
         return 1
-    if steps.get(DEPLOY_STEP) == "success":
+    jobs = api.request("GET", f"actions/runs/{run_id}/jobs?per_page=100")["jobs"]
+    passed = [{s["name"] for s in job.get("steps", []) if s.get("conclusion") == "success"}
+              for job in jobs if job.get("conclusion") == "success"]
+    if any({DEPLOY_STEP, SMOKE_STEP} <= steps for steps in passed):
         summary(f"## Web edition deployed\n\n{tag} is live. Run: {run['html_url']}")
         return 0
-    if steps.get(SKIP_STEP) == "success":
+    if any(SKIP_STEP in steps for steps in passed):
         summary(f"## Web edition NOT deployed\n\nThe GitHub Release {tag} is published, but the web "
                 "edition was **not** deployed: the repository secret `AZURE_STATIC_WEB_APPS_API_TOKEN` "
                 "is missing. The owner must run `./infra/deploy.sh` (see DEPLOY.md), then "
                 f"**Actions → deploy-swa → Run workflow** with ref `{tag}`. Run: {run['html_url']}")
         print("::warning title=Web edition NOT deployed::AZURE_STATIC_WEB_APPS_API_TOKEN is missing; "
               "run ./infra/deploy.sh (see DEPLOY.md)")
-        return 0
-    summary(f"## Web edition NOT deployed\n\nThe deploy run did not upload anything: {run['html_url']}")
-    print("::warning title=Web edition NOT deployed::the deploy step did not run")
-    return 0
+        return 1
+    summary(f"## Web edition: deploy not confirmed\n\nUpload and smoke test did not both succeed "
+            f"for {tag}: {run['html_url']}")
+    return 1
 
 
 # ---------------------------------------------------------------- CLI

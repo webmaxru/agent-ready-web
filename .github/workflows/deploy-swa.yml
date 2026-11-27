@@ -8,13 +8,15 @@ name: deploy-swa
 on:
   push:
     branches: [main]
-  release:
-    types: [published]
   workflow_dispatch:
     inputs:
       ref:
         description: "Published stable release tag or full commit SHA to deploy (also the rollback path)"
         required: true
+      latest_only:
+        description: "Deploy only if still the highest published stable edition (publisher sets this; leave off for rollback)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -25,7 +27,7 @@ concurrency:
 
 jobs:
   published-source:
-    if: github.ref == 'refs/heads/main' || github.event_name == 'release'
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     outputs:
@@ -34,7 +36,7 @@ jobs:
       tag: ${{ steps.source.outputs.tag }}
     env:
       HAS_TOKEN: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN != '' }}
-      DEPLOY_REF: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.ref || github.sha }}
+      DEPLOY_REF: ${{ inputs.ref || github.sha }}
     steps:
       - name: Skip until the Static Web App exists
         if: env.HAS_TOKEN != 'true'
@@ -146,6 +148,7 @@ jobs:
             agents="$agents \`/$p\` $(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$SITE/$p" || true);"
           done
           link=$(curl -sI --max-time 20 "$SITE/" | grep -i '^link:' | head -c 160 || true)
+          [ "$code" = 200 ] || { echo "::error::$SITE/ answered $code"; exit 1; }
           {
             echo "## Web edition deployed"
             echo
@@ -155,4 +158,3 @@ jobs:
             echo "- Agent files:$agents (expected 200 each)"
             echo "- Home page Link header: \`${link:-none}\`"
           } >> "$GITHUB_STEP_SUMMARY"
-          [ "$code" = 200 ] || { echo "::error::$SITE/ answered $code"; exit 1; }

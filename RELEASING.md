@@ -8,7 +8,7 @@ Each release of *Agent-Ready Websites in Action* is a Git tag `vX.Y.Z` on the sq
 - `Agent-Ready-Websites-in-Action-HTML-vX.Y.Z.zip`: the web edition, readable offline (open `index.html`).
 - `SHA256SUMS.txt`.
 
-The release notes are the version's section of [`CHANGELOG.md`](CHANGELOG.md). After a stable release is published, the workflow asks `deploy-swa` to put that tag on the web edition at https://agent-ready-web.salnikov.no (see [`DEPLOY.md`](DEPLOY.md)). Everything runs on the built-in `GITHUB_TOKEN`; no secrets are needed for the release itself.
+The release notes are the version's section of [`CHANGELOG.md`](CHANGELOG.md). If the new publication is the highest stable edition, the workflow asks `deploy-swa` to put that tag on https://agent-ready-web.salnikov.no (see [`DEPLOY.md`](DEPLOY.md)). Everything runs on the built-in `GITHUB_TOKEN`; no secrets are needed for the release itself.
 
 ```text
 /update-book check ─► /update-book prepare ─► content PR ─► Book release preflight (green)
@@ -29,19 +29,21 @@ Every book repository follows the same release flow. A repository conforms when 
 3. **Eligibility.**
    The pull request is open, not a draft, from the same repository, targets `main`, is mergeable, and its head contains the current `main`. Its files are content-only under the book's allowlist. "Book release preflight" is green on the exact head, and the version, CHANGELOG and evidence checks pass.
 4. **Authorization.**
-   Someone else's pull request: an owner Approve review on the current head. The owner's own pull request: an owner comment `/release-book <40-character head SHA>`. A later push, a CHANGES_REQUESTED review, a dismissed review or an edited or deleted comment revokes it. A non-owner never authorizes.
+   Someone else's pull request: the latest formal owner review is Approve on the current head; ordinary COMMENTED reviews neither authorize nor revoke. The owner's own pull request: any still-present, unedited owner comment with the exact whole body `/release-book <40-character lowercase head SHA>`; extra whitespace is invalid. A later push invalidates authorization for the old head. A CHANGES_REQUESTED or DISMISSED review from any reviewer, or any review-dismissal timeline event at its actual event time, requires fresh owner authorization strictly afterward. Editing or deleting an authorization comment removes that comment's authority, but unrelated, stale or invalid comments do not cancel another valid comment. A non-owner never authorizes. The identical `tests/test_approval_contract.py` exercises these decisions in all four books.
 5. **Merge.**
    A squash merge conditioned on the approved head SHA. The controller then dispatches `release.yml`, because merges made with `GITHUB_TOKEN` trigger no workflows.
 6. **Release.**
-   `release.yml` is dispatch-only, with the inputs `pr`, `head_sha`, `base_sha`, `merge_sha` and `tag`, and the concurrency group `book-publish`. Steps: plan, build from the merge commit, annotated tag, draft release, upload assets, publish, deploy the released tag, smoke test. Never clobber assets and never move a tag. A complete release is a no-op. A partial release or a provenance mismatch fails with no writes. Latest goes only to the highest stable version, and prereleases are never Latest. A fix is a new version.
+   `release.yml` is dispatch-only, with the inputs `pr`, `head_sha`, `base_sha`, `merge_sha` and `tag`, and the concurrency group `book-publish`. Steps: plan, build from the merge commit, annotated tag, draft release, upload assets, publish, deploy the released tag, smoke test. Never clobber assets and never move a tag. A complete published release is a no-op, including no redeployment. A partial release (tag-only, any existing draft, or incomplete published assets) or a provenance mismatch fails with no writes. Latest goes only to the highest published stable edition; bare tags, drafts and prereleases do not compete. A fix is a new version.
 7. **Deploy.**
-   Production serves only released editions. A push to `main` deploys only when the content equals the latest published release (the `published-source` job). The release deploys its own tag. A manual dispatch takes a released ref or sha, which is the rollback path.
+   Production serves only released editions. A push to `main` deploys only when the content equals the latest published stable release (the `published-source` job). After a new publication, the release automatically deploys its own tag only if it is the highest published stable edition; older editions and prereleases do not roll production back. The release waits for its exact deployment run and requires successful deployment and smoke-test steps; failure, timeout, missing credentials or skipped checks cannot be reported as a successful deployment. A manual deploy dispatch takes a published stable ref or sha, including an older edition, which is the explicit rollback path.
 8. **No other publisher.**
    A tag push, a label or a branch name never publishes. A manual merge to `main` bypasses the controller; the fix is a catch-up pull request with a higher version.
 9. **Pins.**
-   Runner `ubuntu-24.04`. `actions/checkout@v7`, `actions/setup-python@v7`, `actions/upload-artifact@v7`, `actions/download-artifact@v8` (a full commit SHA with a trailing `# v7.x.y` version comment is acceptable).
+   Runner `ubuntu-24.04`. `actions/checkout@v7`, `actions/setup-python@v7`, `actions/upload-artifact@v7`, `actions/download-artifact@v8`.
 
 ### Per-book settings
+
+These may differ between books and are documented in each repository: the format and build, the version file, scheme and tag format, the content allowlist, the evidence rules, the deploy target and domain, the catch-up pull request rules, and how upstream updates are scouted.
 
 | Setting | Agent-Ready Websites in Action |
 | --- | --- |
@@ -49,7 +51,7 @@ Every book repository follows the same release flow. A repository conforms when 
 | Version file, scheme and tags | `tools/book.json`: SemVer `X.Y.Z`, tag `vX.Y.Z`; review copies `X.Y.Z-rc.N` / `vX.Y.Z-rc.N`. Release metadata keys: `version`, `edition`, `checked_as_of`, `year`. |
 | Content allowlist | `tools/release_policy.py`: `manuscript/`, `editorial/`, `validation/`, `figures/`, `VALIDATION.md`; `CHANGELOG.md` and the metadata keys may accompany content. Tooling-only and mixed PRs never auto-merge. |
 | Evidence rules | Changed chapters/appendices with a validation table need a changed editorial log and fresh added/updated `Retrieved` rows. Validation changes also require `VALIDATION.md`; content symlinks/submodules are rejected. The date window starts at the base commit and permits tomorrow UTC for time-zone tolerance. |
-| Deploy target and domain | Azure Static Web Apps Free, `deploy-swa.yml`, https://agent-ready-web.salnikov.no (live). Token absence skips cleanly. Only published **stable** editions deploy; prereleases never reach production, including by manual dispatch. |
+| Deploy target and domain | Azure Static Web Apps Free, `deploy-swa.yml`, https://agent-ready-web.salnikov.no (live). A missing token skips upload in the standalone workflow and fails delivery in **Release book**. Only published **stable** editions deploy; prereleases never reach production, including by manual dispatch. |
 | Published-source comparison | Main's trusted Python policy compares every content-allowlisted path, `CHANGELOG.md` and release-metadata keys to the highest published stable release. Tooling/theme/build-configuration differences alone may deploy; any content or evidence difference skips. No duplicated YAML content-path list. Released refs resolve to immutable SHAs before checkout; legacy `v1.0.0` and `v2.0.0` remain rollback targets. |
 | Catch-up PR rules | A higher version than the unreleased main version and the latest stable release, dated CHANGELOG notes covering the entire unreleased change, and a genuine allowlisted content/evidence update. Version/CHANGELOG alone are tooling-only and fail. Existing evidence rules still apply; no special catch-up bypass. |
 | Upstream-update scouting | `/update-book check` calls `tools/check_upstream.py` for cited-source changes; `/update-book prepare` updates affected chapters and their evidence. Preparation stops at a local commit unless the owner requests a PR. |
@@ -95,7 +97,7 @@ A version is released only from an **owner-approved, content-only pull request**
    - **plan:** checks that the merge commit is that pull request's squash on `main`, that its tree is the approved head, that the tag matches `tools/book.json`, and that the previous release is an ancestor;
    - **build:** builds the four editions and `SHA256SUMS.txt` from the exact merge commit, with the lint, `check_site` and EPUBCheck. This happens *before* any tag exists, so a failed build leaves nothing behind;
    - **publish:** creates the annotated tag `vX.Y.Z` at the merge commit, uploads the files to a draft release, checks them and publishes it. The notes are the version's `CHANGELOG.md` section. The release is marked **Latest** only if it is the highest stable version; `X.Y.Z-rc.N` is published as a pre-release;
-   - **deploy:** dispatches `deploy-swa` with `ref` set to the tag, and reports in the run summary whether the web edition went live. A pre-release is not deployed. If the deploy fails, or the Azure deployment token is missing, the summary says **Web edition NOT deployed** (see [scenario 13](#13-only-the-deploy-failed)).
+   - **deploy:** for a new highest published stable edition, dispatches `deploy-swa` once with `ref` set to its tag and `latest_only` enabled. An older edition or prerelease gets a notice and no dispatch. The publisher waits for the run ID GitHub returns, not the newest run listed in Actions. The release's delivery job fails unless that run completes successfully and both its Azure upload and smoke test pass (see [scenario 13](#13-only-the-deploy-failed)).
 7. Upload the new PDF and EPUB to Leanpub, and the print PDF to KDP (see [README.md](README.md#publishing)).
 
 Locally, before step 2 (CI runs the same checks):
@@ -168,7 +170,7 @@ Commands use the [GitHub CLI](https://cli.github.com/) (`gh`) from a clone of th
 | Push a tag, add a label, press **Merge** | Nothing in the release flow. | **No** |
 | Push to `main` | **deploy-swa / published-source** compares content to the highest published stable edition. Only matching content deploys; tooling differences are allowed. Unreleased changes skip cleanly. | **No** |
 | **Release book → Run workflow** on `main` | Checks the merged PR's provenance; a new release builds before tagging. A complete release is a no-op; a partial release fails without writes. | Only for an eligible, previously unpublished merge |
-| New stable release published, or release's explicit deploy dispatch | **deploy-swa** builds that released tag, not a newer main commit. | Already published |
+| **Release book** publishes a new highest stable version | The publisher dispatches **deploy-swa** for that tag and waits for its upload and smoke test. A GitHub `release: published` event does not start a second deploy. | Already published |
 | **deploy-swa → Run workflow** on `main`, with `ref` | Accepts only a published stable tag or its full SHA; this is the rollback path. | No |
 
 The web edition and downloads share the release boundary. Only the controller's approved squash-merge can produce a new publication; an ordinary main push cannot put unreleased book content online.
@@ -206,7 +208,7 @@ The web edition and downloads share the release boundary. Only the controller's 
    gh release view vX.Y.Z
    ```
 
-**Result:** the PR is squash-merged, `vX.Y.Z` is an annotated tag on the merge commit, the release has the PDF, print PDF, EPUB, HTML zip and `SHA256SUMS.txt`, it is Latest if it is the highest stable version, and `deploy-swa` puts the tag on https://agent-ready-web.salnikov.no. The run summary of **Release book** says **Web edition deployed** after the smoke test succeeds.
+**Result:** the PR is squash-merged, `vX.Y.Z` is an annotated tag on the merge commit, and the release has the PDF, print PDF, EPUB, HTML zip and `SHA256SUMS.txt`. Only the highest published stable version becomes Latest and is deployed to https://agent-ready-web.salnikov.no. The run summary of **Release book** says **Web edition deployed** after the dispatched run's upload and smoke test succeed.
 
 ### 2. Someone else's PR on a branch in this repository
 
@@ -316,7 +318,7 @@ To confirm an existing approved publication, use `gh workflow run release.yml -f
 
 ### 13. Only the deploy failed
 
-The release is published and complete, but its web edition was not deployed: **deploy-swa** failed, or the run summary says **Web edition NOT deployed** or *not confirmed*. Do not re-run **Release book**. Check that the Azure token exists, then deploy the tag:
+The GitHub Release is published and complete, but delivery failed or could not be confirmed. Do not re-run **Release book**. Inspect the deployment run: a timeout or lost dispatch response does not mean the upload failed. Do not dispatch again while the outcome is unknown. If delivery still needs repair, confirm the intended production tag and check the Azure token, then deploy that tag explicitly:
 
 ```sh
 gh secret list | grep AZURE_STATIC_WEB_APPS_API_TOKEN

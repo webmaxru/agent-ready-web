@@ -428,12 +428,15 @@ class Controller(unittest.TestCase):
         self.assertTrue(release["latest"])
         self.assertEqual(policy.missing_assets("v2.1.0", release["assets"]), [])
         self.assertIn("(Latest)", out)
+        self.assertIn("published=true", out)
 
     def test_published_complete_release_is_a_no_op(self):
         merge_sha = self.merged()
         self.publish("v2.1.0", merge_sha)
         writes = list(self.s.writes)
-        self.assertIn("left unchanged", self.publish("v2.1.0", merge_sha))
+        result = self.publish("v2.1.0", merge_sha)
+        self.assertIn("left unchanged", result)
+        self.assertIn("published=false", result)
         self.assertEqual(self.plan(number=PR)["recovery"], "true")
         self.assertEqual(self.s.writes, writes)
 
@@ -508,23 +511,95 @@ class Controller(unittest.TestCase):
     def deploy(self, tag="v2.1.0", **kwargs):
         return self.run_op(br.deploy, self.api, tag, interval=0, **kwargs)
 
-    def test_deploy_reports_a_missing_secret_as_not_deployed(self):
-        code, _, out = self.deploy()
+    def add_release(self, tag, **flags):
+        self.s.releases.append({"tag_name": tag, "draft": False, "prerelease": False, **flags})
+
+    def test_deploy_only_highest_published_stable(self):
+        for tag in ("v2.1.0", "v2.10.0"):
+            self.add_release(tag)
+        self.s.tag("v7.0.0", self.base)
+        self.add_release("v8.0.0", draft=True)
+        self.add_release("v9.0.0", prerelease=True)
+        self.add_release("v10.0.0-rc.1")
+        self.s.deploy_outcome = "deployed"
+        code, _, out = self.deploy("v2.1.0")
         self.assertEqual(code, 0)
+        self.assertIn("v2.10.0", out)
+        self.assertEqual(self.s.dispatches, [])
+        self.assertEqual(self.deploy("v2.10.0")[0], 0)
+        self.assertEqual(self.s.dispatches, [(br.DEPLOY_WORKFLOW, {"ref": "main", "inputs": {
+            "ref": "v2.10.0", "latest_only": "true"}})])
+
+    def test_unpublished_candidate_is_not_dispatched(self):
+        self.s.tag("v2.1.0", self.base)
+        result = self.cli("deploy", "--tag", "v2.1.0", "--timeout", "1")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("not a published stable release", result.stderr)
+        self.assertEqual(self.s.dispatches, [])
+
+    def test_deploy_reports_a_missing_secret_as_not_deployed(self):
+        self.add_release("v2.1.0")
+        code, _, out = self.deploy()
+        self.assertEqual(code, 1)
         self.assertIn("## Web edition NOT deployed", out)
         self.assertIn("AZURE_STATIC_WEB_APPS_API_TOKEN", out)
         self.assertIn("./infra/deploy.sh", out)
         self.assertNotIn("is live", out)
-        self.assertEqual(self.s.dispatches, [("deploy-swa.yml", {"ref": "main", "inputs": {"ref": "v2.1.0"}})])
+        self.assertEqual(self.s.dispatches, [("deploy-swa.yml", {"ref": "main", "inputs": {
+            "ref": "v2.1.0", "latest_only": "true"}})])
 
     def test_deploy_outcomes(self):
+        self.add_release("v2.1.0")
         for outcome, code, text in [("deployed", 0, "## Web edition deployed"), ("failed", 1, "NOT deployed"),
+                                    ("smoke-skipped", 1, "not confirmed"), ("upload-skipped", 1, "not confirmed"),
                                     ("hang", 1, "deploy not confirmed")]:
             with self.subTest(outcome=outcome):
                 self.s.deploy_outcome = outcome
                 result, _, out = self.deploy(timeout=1)
                 self.assertEqual(result, code)
                 self.assertIn(text, out)
+
+    def test_deploy_ignores_nearby_runs(self):
+        self.add_release("v2.1.0")
+        dispatch = self.s.deploy_dispatched
+
+        def interleaved():
+            self.s.deploy_outcome = "failed"
+            ours = dispatch()
+            self.s.deploy_outcome = "smoke-skipped"
+            dispatch()
+            return ours
+
+        with mock.patch.object(self.s, "deploy_dispatched", side_effect=interleaved):
+            result = self.cli("deploy", "--tag", "v2.1.0", "--timeout", "2", "--interval", "0")
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn(self.s.runs[0]["html_url"], result.stdout)
+        self.assertNotIn(self.s.runs[1]["html_url"], result.stdout)
+        self.assertNotIn("is live", result.stdout)
+        self.assertEqual(len(self.s.dispatches), 1)
+
+    def test_missing_dispatch_identity_is_not_retried_or_inferred(self):
+        self.add_release("v2.1.0")
+        self.s.deploy_outcome = "deployed"
+        request = self.api.request
+
+        def lost_response(method, *args, **kwargs):
+            result = request(method, *args, **kwargs)
+            return {} if method == "POST" else result
+
+        with mock.patch.object(self.api, "request", side_effect=lost_response):
+            code, _, out = self.deploy(timeout=1)
+        self.assertEqual(code, 1)
+        self.assertIn("not confirmed", out)
+        self.assertEqual(len(self.s.dispatches), 1)
+
+    def test_missing_workflow_fails_delivery(self):
+        self.add_release("v2.1.0")
+        with mock.patch.object(br, "DEPLOY_WORKFLOW", "missing.yml"):
+            code, _, out = self.deploy(timeout=1)
+        self.assertEqual(code, 1)
+        self.assertIn("missing.yml", out)
+        self.assertEqual(self.s.dispatches, [])
 
     def test_prerelease_is_not_deployed(self):
         code, _, out = self.deploy("v2.1.0-rc.1")
@@ -584,15 +659,19 @@ class Controller(unittest.TestCase):
         self.assertFalse(self.release("v2.1.0")["draft"])
         again = self.cli("release-plan", "--tag", "v2.1.0")
         self.assertIn("recovery=true", again.stdout, again.stderr)
-        event.write_text(json.dumps({"inputs": {"ref": "v2.1.0"}}), encoding="utf-8")
+        self.s.deploy_outcome = "deployed"
+        deployed = self.cli("deploy", "--tag", "v2.1.0", "--interval", "0", "--timeout", "5")
+        self.assertEqual(deployed.returncode, 0, deployed.stderr)
+        self.assertIn("v2.1.0 is live", deployed.stdout)
+        self.assertIn(self.s.runs[-1]["html_url"], deployed.stdout)
+        workflow, payload = self.s.dispatches[-1]
+        self.assertEqual((workflow, payload), ("deploy-swa.yml", {"ref": "main", "inputs": {
+            "ref": "v2.1.0", "latest_only": "true"}}))
+        event.write_text(json.dumps(payload), encoding="utf-8")
         with mock.patch.dict(os.environ, {"GITHUB_EVENT_NAME": "workflow_dispatch"}):
             source = self.cli("published-source", "--event", str(event))
         self.assertEqual(source.returncode, 0, source.stderr)
         self.assertIn(f"sha={inputs['merge_sha']}", source.stdout)
-        deployed = self.cli("deploy", "--tag", "v2.1.0", "--interval", "0", "--timeout", "5")
-        self.assertEqual(deployed.returncode, 0, deployed.stderr)
-        self.assertIn("NOT deployed", deployed.stdout)
-        self.assertEqual(self.s.dispatches[-1], ("deploy-swa.yml", {"ref": "main", "inputs": {"ref": "v2.1.0"}}))
 
 
 class PublishedSource(unittest.TestCase):
@@ -668,12 +747,13 @@ class PublishedSource(unittest.TestCase):
         self.s.releases.clear()
         self.assertEqual(self.push(), {"eligible": "false"})
 
-    def test_release_event_and_manual_rollback_use_their_own_published_tag_or_sha(self):
+    def test_manual_rollback_uses_its_own_published_tag_or_sha(self):
         self.repo.chapter()
         self.repo.release("2.1.0")
         self.published("v2.1.0", self.repo.commit())
-        for event in ({"event_name": "release", "release": {"tag_name": "v2.0.0"}},
-                      {"event_name": "workflow_dispatch", "inputs": {"ref": "v2.0.0"}},
+        self.assertEqual(self.gate({"event_name": "workflow_dispatch", "inputs": {
+            "ref": "v2.0.0", "latest_only": "true"}}), {"eligible": "false"})
+        for event in ({"event_name": "workflow_dispatch", "inputs": {"ref": "v2.0.0"}},
                       {"event_name": "workflow_dispatch", "inputs": {"ref": self.repo.base}}):
             with self.subTest(event=event):
                 self.assertEqual(self.gate(event), {"eligible": "true", "sha": self.repo.base, "tag": "v2.0.0"})
@@ -690,9 +770,8 @@ class PublishedSource(unittest.TestCase):
                                 {"event_name": "workflow_dispatch", "inputs": {"ref": ref}})
         self.assertEqual(self.s.writes, [])
 
-    def test_prerelease_event_skips_and_other_push_branches_fail(self):
-        self.assertEqual(self.gate({"event_name": "release", "release": {
-            "tag_name": "v2.1.0-rc.1", "prerelease": True}}), {"eligible": "false"})
+    def test_release_event_and_other_push_branches_fail(self):
+        self.assertGate("unsupported", self.gate, {"event_name": "release", "release": {"tag_name": "v2.0.0"}})
         self.assertGate("main", self.gate, {"event_name": "push", "ref": "refs/heads/other"})
 
     def test_push_cli_runs_the_gate_on_a_real_git_checkout(self):

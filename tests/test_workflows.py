@@ -97,6 +97,7 @@ class Workflows(unittest.TestCase):
         self.assertIn("python ../trusted/infra/check_site.py", build)
         self.assertLess(text.index("  build:"), text.index("book_release.py publish"))
         self.assertNotIn("needs.plan.outputs.recovery == 'true'", text[text.index("  deploy:"):])
+        self.assertIn("needs.publish.outputs.published == 'true'", text[text.index("  deploy:"):])
 
     def test_controller_and_publisher_jobs_are_guarded_to_main(self):
         for name in ("approved-book.yml", "release.yml"):
@@ -118,7 +119,7 @@ class Workflows(unittest.TestCase):
         self.assertIn("DEPLOY_REF: ${{ needs.published-source.outputs.sha }}", deploy)
         self.assertIn("ref: main", deploy)
         self.assertIn("python3 ../trusted/infra/check_site.py dist/site", deploy)
-        self.assertIn("name: Smoke test", deploy)
+        self.assertIn(f"name: {br.SMOKE_STEP}", deploy)
         self.assertIn("if: env.HAS_TOKEN != 'true'", gate)
         self.assertIn("if: env.HAS_TOKEN == 'true'", gate)
         self.assertNotIn("Azure/static-web-apps-deploy", gate)
@@ -137,7 +138,7 @@ class Workflows(unittest.TestCase):
         self.assertIn(f"name: {br.DEPLOY_STEP}", text)
         self.assertIn(f"name: {br.SKIP_STEP}", text)
         self.assertIn("Web edition NOT deployed", text)
-        self.assertIn("workflow_dispatch", triggers(text))
+        self.assertEqual(triggers(text), ["push", "workflow_dispatch"])
 
     def test_controller_names_existing_workflows(self):
         for name in (br.CHECK_WORKFLOW, br.RELEASE_WORKFLOW, br.DEPLOY_WORKFLOW):

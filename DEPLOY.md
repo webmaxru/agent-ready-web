@@ -73,13 +73,12 @@ No other secrets, variables or Azure credentials are used. The workflow uses onl
 `.github/workflows/deploy-swa.yml` builds the site and uploads it with `Azure/static-web-apps-deploy@v1` (pinned to a commit) on:
 
 - a push to `main`, **only** when `published-source` confirms content, evidence, CHANGELOG and release metadata match the highest published stable release; tooling/theme differences alone are allowed;
-- a dispatch from **Release book** with `ref` set to the new tag, after it publishes a stable version (the built-in token doesn't fire the `release` event, so the publisher explicitly starts the deploy and waits for it; see [`RELEASING.md`](RELEASING.md));
-- a stable GitHub Release `published` event (it builds that release's tag);
+- a dispatch from **Release book** after publishing the highest stable edition. It passes the new tag as `ref`, sets `latest_only` so the queued run rechecks that tag, and waits for the exact run returned by the API. There is no separate `release: published` trigger;
 - **Run workflow** on `main`, with a required `ref` that is a published stable tag or its full commit SHA.
 
 The gate and content allowlist run from trusted `main` code, not the requested ref; checkout uses the immutable SHA the gate returns. Branch names, unpublished tags, drafts and prereleases are refused for manual dispatch. A manually merged content PR therefore cannot put unreleased text online.
 
-Without the secret (for example in a fork or fresh setup), the workflow uploads nothing and stays green. Its run summary and a warning say **Web edition NOT deployed** and why. **Release book** reports the same instead of claiming a deployment. The current production token and domain are configured; [CUSTOM-DOMAIN.md](CUSTOM-DOMAIN.md) documents setup and recovery. Runs never overlap (concurrency group `swa-production`). The smoke-test summary shows the URL, `/`, missing-page and agent-file status codes.
+Without the secret (for example in a fork or fresh setup), the standalone workflow uploads nothing and stays green. Its summary says **Web edition NOT deployed**. The **Release book** caller fails delivery: a green workflow without a successful Azure upload and smoke test is not proof of deployment. A missing run ID or timeout also leaves delivery unconfirmed; inspect Actions before retrying. The current production token and domain are configured; [CUSTOM-DOMAIN.md](CUSTOM-DOMAIN.md) documents setup and recovery. Runs never overlap (concurrency group `swa-production`). The smoke-test summary shows the URL, `/`, missing-page and agent-file status codes.
 
 ## Rolling back
 
@@ -111,6 +110,6 @@ It deletes the resource group `rg-agent-ready-web` with the Static Web App, its 
 | `infra/main.bicepparam` | Parameters for a direct `az deployment group create` without the script. |
 | `infra/check_site.py` | Pre-upload check (limits, CSP vs. pages); `--update-csp` refreshes the inline-script hashes. |
 | `staticwebapp.config.json` | Headers (CSP, HSTS, nosniff, referrer and permissions policy), caching, the 404 page, MIME types. Copied into `dist/site/` by the build. |
-| `.github/workflows/deploy-swa.yml` | Published-source gate, build, upload and smoke check on push, release and manual runs. |
+| `.github/workflows/deploy-swa.yml` | Published-source gate, build, upload and smoke check on main pushes and explicit dispatches. |
 | `.github/workflows/infra.yml` | No-login validation of the infra files: Bicep build + lint, PowerShell parse (5.1 and 7), PSScriptAnalyzer, ShellCheck. |
 | `CUSTOM-DOMAIN.md` | agent-ready-web.salnikov.no step by step. |

@@ -47,7 +47,7 @@ class State:
         self.gh_calls = []
         self.writes = []
         self.merge_requests = []
-        self.deploy_outcome = "skipped"  # skipped | deployed | failed | hang
+        self.deploy_outcome = "skipped"
         self.next_id = 1000
         self.lock = threading.Lock()
 
@@ -186,10 +186,14 @@ class State:
                "html_url": f"https://example.test/runs/{run_id}"}
         self.runs.append(run)
         skip = "success" if outcome == "skipped" else "skipped"
-        upload = "success" if outcome == "deployed" else ("failure" if outcome == "failed" else "skipped")
+        upload = ("success" if outcome in {"deployed", "smoke-skipped"}
+                  else "failure" if outcome == "failed" else "skipped")
+        smoke = "success" if outcome in {"deployed", "upload-skipped"} else "skipped"
         self.jobs[run_id] = [{"name": "deploy", "conclusion": run["conclusion"], "steps": [
             {"name": "Skip until the Static Web App exists", "conclusion": skip},
-            {"name": "Deploy to Azure Static Web Apps (production)", "conclusion": upload}]}]
+            {"name": "Deploy to Azure Static Web Apps (production)", "conclusion": upload},
+            {"name": "Smoke test", "conclusion": smoke}]}]
+        return run
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -331,15 +335,21 @@ class Handler(BaseHTTPRequestHandler):
                 body = self._body()
                 s.dispatches.append((workflow, body))
                 if workflow == "deploy-swa.yml":
-                    s.deploy_dispatched()
+                    run = s.deploy_dispatched()
+                    if self.headers.get("X-GitHub-Api-Version") == "2026-03-10":
+                        return 200, {"workflow_run_id": run["id"], "html_url": run["html_url"],
+                                     "run_url": f"http://{self.headers['Host']}{prefix}actions/runs/{run['id']}"}
                 return 204, None
             if parts[3] == "runs":
                 runs = [r for r in s.runs if r["workflow"] == workflow
                         and (not query.get("head_sha") or r["head_sha"] == query["head_sha"])
                         and (not query.get("event") or r["event"] == query["event"])]
                 return 200, {"workflow_runs": runs[::-1]}
-        if parts[:2] == ["actions", "runs"] and parts[3] == "jobs":
-            return 200, {"jobs": s.jobs[int(parts[2])]}
+        if parts[:2] == ["actions", "runs"]:
+            if len(parts) == 3:
+                return 200, next(r for r in s.runs if r["id"] == int(parts[2]))
+            if parts[3] == "jobs":
+                return 200, {"jobs": s.jobs[int(parts[2])]}
         return 404, {"message": f"unhandled {method} {path}"}
 
 
