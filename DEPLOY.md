@@ -1,6 +1,6 @@
 # Deploying the web edition to Azure Static Web Apps
 
-The free web edition of the book (`python3 tools/build.py site` → `dist/site/`) is hosted on an **Azure Static Web App on the Free plan**. It's uploaded with the app's deployment token, so it doesn't depend on the repo being public, on GitHub Pages, or on Azure's GitHub app. The repo stays private.
+The free web edition of the book (`python3 tools/build.py site` → `dist/site/`) is live at https://agent-ready-web.salnikov.no on an **Azure Static Web App on the Free plan**. It's uploaded with the app's deployment token, so it doesn't depend on GitHub Pages or Azure's GitHub app. This repository is public.
 
 ## Prerequisites
 
@@ -72,18 +72,17 @@ No other secrets, variables or Azure credentials are used. The workflow uses onl
 
 `.github/workflows/deploy-swa.yml` builds the site and uploads it with `Azure/static-web-apps-deploy@v1` (pinned to a commit) on:
 
-- a push to `main` that changes `manuscript/`, `theme/`, `tools/`, `staticwebapp.config.json`, `infra/check_site.py` or `CHANGELOG.md`;
-- a dispatch from the **Release** workflow with `ref` set to the new tag, after it publishes a stable version (a release published with the built-in token doesn't fire the `release` event, so Release starts the deploy explicitly and waits for it; see [`RELEASING.md`](RELEASING.md));
-- a GitHub Release published by hand (it builds the release's tag);
-- **Run workflow** in the Actions tab, optionally with a `ref`.
+- a push to `main`, **only** when `published-source` confirms content, evidence, CHANGELOG and release metadata match the highest published stable release; tooling/theme differences alone are allowed;
+- a dispatch from **Release book** after publishing the highest stable edition. It passes the new tag as `ref`, sets `latest_only` so the queued run rechecks that tag, and waits for the exact run returned by the API. There is no separate `release: published` trigger;
+- **Run workflow** on `main`, with a required `ref` that is a published stable tag or its full commit SHA.
 
-Without the secret (a fork, a fresh clone, or this repository before the first `./infra/deploy.sh`), the workflow uploads nothing and stays green. Its run summary and a warning say **Web edition NOT deployed** and why. The Release workflow's deploy job reads that run and reports the same in its own summary: the GitHub Release is published, but the web edition is not. It never reports a deploy that didn't happen.
+The gate and content allowlist run from trusted `main` code, not the requested ref; checkout uses the immutable SHA the gate returns. Branch names, unpublished tags, drafts and prereleases are refused for manual dispatch. A manually merged content PR therefore cannot put unreleased text online.
 
-**Until the owner sets this up, the web edition is not live.** `AZURE_STATIC_WEB_APPS_API_TOKEN` is not set, and `agent-ready-web.salnikov.no` has no DNS record. To fix it, run `./infra/deploy.sh` once as described above. It creates the Static Web App, stores the token and prints the app's URL. Then add the CNAME record and bind the domain as described in [CUSTOM-DOMAIN.md](CUSTOM-DOMAIN.md) (`--custom-domain agent-ready-web.salnikov.no`). Then deploy the latest release: **Actions → deploy-swa → Run workflow** with `ref` set to its tag. Runs never overlap (concurrency group `swa-production`). The run summary shows the URL and the status codes of `/` and a missing page.
+Without the secret (for example in a fork or fresh setup), the standalone workflow uploads nothing and stays green. Its summary says **Web edition NOT deployed**. The **Release book** caller fails delivery: a green workflow without a successful Azure upload and smoke test is not proof of deployment. A missing run ID or timeout also leaves delivery unconfirmed, including a successful run or step result that arrives only at or after the wait deadline; inspect Actions before retrying. The current production token and domain are configured; [CUSTOM-DOMAIN.md](CUSTOM-DOMAIN.md) documents setup and recovery. Runs never overlap (concurrency group `swa-production`). The smoke-test summary shows the URL, `/`, missing-page and agent-file status codes.
 
 ## Rolling back
 
-Actions → **deploy-swa** → **Run workflow** → `ref` = the release tag to go back to (for example `v1.0.0`) → Run. It checks out that tag, builds it and uploads it to production. Roll forward the same way with a newer tag, or just push to `main`.
+Actions → **deploy-swa** → **Run workflow** on `main` → `ref` = the published stable release tag to go back to (for example `v1.0.0`) → Run. It resolves the tag to its commit, builds it and uploads it to production. Roll forward the same way with a newer published tag. A main push rolls forward only if its book content passes the published-source gate.
 
 Locally: `git checkout v1.0.0 && ./infra/deploy.sh --upload-only` (Windows: `git checkout v1.0.0; pwsh ./infra/deploy.ps1 -UploadOnly`).
 
@@ -111,6 +110,6 @@ It deletes the resource group `rg-agent-ready-web` with the Static Web App, its 
 | `infra/main.bicepparam` | Parameters for a direct `az deployment group create` without the script. |
 | `infra/check_site.py` | Pre-upload check (limits, CSP vs. pages); `--update-csp` refreshes the inline-script hashes. |
 | `staticwebapp.config.json` | Headers (CSP, HSTS, nosniff, referrer and permissions policy), caching, the 404 page, MIME types. Copied into `dist/site/` by the build. |
-| `.github/workflows/deploy-swa.yml` | Build + upload on push, release and manual runs. |
+| `.github/workflows/deploy-swa.yml` | Published-source gate, build, upload and smoke check on main pushes and explicit dispatches. |
 | `.github/workflows/infra.yml` | No-login validation of the infra files: Bicep build + lint, PowerShell parse (5.1 and 7), PSScriptAnalyzer, ShellCheck. |
 | `CUSTOM-DOMAIN.md` | agent-ready-web.salnikov.no step by step. |

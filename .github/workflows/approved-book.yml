@@ -12,7 +12,7 @@
 #
 # Wake-ups: a review (via "Book approval signal"), a finished "Book CI" run, an owner comment,
 # a scan every 30 minutes (recovers missed events), or Run workflow with a PR number.
-# The repository is on the free plan without branch protection: a manual merge bypasses this.
+# A manual merge bypasses this controller; see the catch-up scenario in RELEASING.md.
 name: Release approved book
 
 on:
@@ -20,7 +20,7 @@ on:
     workflows: ["Book approval signal", "Book CI"]
     types: [completed]
   issue_comment:
-    types: [created]
+    types: [created, edited, deleted]
   schedule:
     - cron: "17,47 * * * *"
   workflow_dispatch:
@@ -38,10 +38,11 @@ concurrency:
 jobs:
   authorize:
     if: >-
-      github.event_name != 'issue_comment' ||
+      github.ref == 'refs/heads/main' &&
+      (github.event_name != 'issue_comment' ||
       (github.event.issue.pull_request &&
        github.event.comment.user.login == 'webmaxru' &&
-       startsWith(github.event.comment.body, '/release-book '))
+       startsWith(github.event.comment.body, '/release-book ')))
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -70,7 +71,7 @@ jobs:
 
   preflight:
     needs: authorize
-    if: needs.authorize.outputs.eligible == 'true'
+    if: github.ref == 'refs/heads/main' && needs.authorize.outputs.eligible == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -110,7 +111,7 @@ jobs:
 
   merge:
     needs: [authorize, preflight]
-    if: needs.authorize.outputs.eligible == 'true' && needs.preflight.result == 'success'
+    if: github.ref == 'refs/heads/main' && needs.authorize.outputs.eligible == 'true' && needs.preflight.result == 'success'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:

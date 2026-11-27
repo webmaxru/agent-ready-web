@@ -45,7 +45,9 @@ class State:
         self.jobs = {}
         self.dispatches = []   # (workflow, payload)
         self.gh_calls = []
-        self.deploy_outcome = "skipped"  # skipped | deployed | failed | hang
+        self.writes = []
+        self.merge_requests = []
+        self.deploy_outcome = "skipped"
         self.next_id = 1000
         self.lock = threading.Lock()
 
@@ -120,8 +122,9 @@ class State:
         return review
 
     def comment(self, number, body, *, user=OWNER, at=None):
+        at = at or now()
         self.comments[number].append({"id": self.new_id(), "user": {"login": user}, "body": body,
-                                      "created_at": at or now()})
+                                      "created_at": at, "updated_at": at})
 
     def ci_run(self, head, branch="update/chapter-1", *, conclusion="success", job_conclusion="success",
                job="Book release preflight"):
@@ -149,6 +152,8 @@ class State:
             self.releases.append({"id": self.new_id(), "tag_name": tag, "draft": "--draft" in rest,
                                   "prerelease": "--prerelease" in rest, "assets": [], "latest": False})
         elif verb == "upload":
+            if "--clobber" in rest:
+                raise ValueError("asset replacement is forbidden")
             if not release:
                 raise ValueError("no release")
             if not release["draft"]:
@@ -157,7 +162,8 @@ class State:
                 if item.startswith("--"):
                     continue
                 name = os.path.basename(item)
-                release["assets"] = [a for a in release["assets"] if a["name"] != name]
+                if any(a["name"] == name for a in release["assets"]):
+                    raise ValueError("asset already exists")
                 release["assets"].append({"name": name, "state": "uploaded", "size": os.path.getsize(item)})
         elif verb == "edit":
             if "--draft=false" in rest:
@@ -180,10 +186,14 @@ class State:
                "html_url": f"https://example.test/runs/{run_id}"}
         self.runs.append(run)
         skip = "success" if outcome == "skipped" else "skipped"
-        upload = "success" if outcome == "deployed" else ("failure" if outcome == "failed" else "skipped")
+        upload = ("success" if outcome in {"deployed", "smoke-skipped"}
+                  else "failure" if outcome == "failed" else "skipped")
+        smoke = "success" if outcome in {"deployed", "upload-skipped"} else "skipped"
         self.jobs[run_id] = [{"name": "deploy", "conclusion": run["conclusion"], "steps": [
             {"name": "Skip until the Static Web App exists", "conclusion": skip},
-            {"name": "Deploy to Azure Static Web Apps (production)", "conclusion": upload}]}]
+            {"name": "Deploy to Azure Static Web Apps (production)", "conclusion": upload},
+            {"name": "Smoke test", "conclusion": smoke}]}]
+        return run
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -215,6 +225,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def _route(self, method):
         with self.state.lock:
+            if method != "GET":
+                self.state.writes.append((method, self.path))
             try:
                 code, data = self.route(method)
             except (KeyError, StopIteration):
@@ -258,12 +270,17 @@ class Handler(BaseHTTPRequestHandler):
                 return paged(s.reviews[pr["number"]])
             if parts[2] == "merge" and method == "PUT":
                 body = self._body()
+                s.merge_requests.append(body)
+                if body.get("merge_method") != "squash":
+                    return 422, {"message": "Only squash merges are allowed"}
                 if pr["state"] != "open" or body.get("sha") != pr["head"]["sha"]:
                     return 409, {"message": "Head branch was modified"}
                 main = s.resolve("main")
                 merge = s.commit(s.commits[pr["head"]["sha"]]["files"], [main])
+                s.commits[merge]["tree"] = s.commits[pr["head"]["sha"]]["tree"]
                 s.refs["heads/main"] = {"type": "commit", "sha": merge}
-                pr.update(state="closed", merged=True, merge_commit_sha=merge, merged_at=now(), mergeable=None)
+                pr.update(state="closed", merged=True, merge_commit_sha=merge, merged_at=now(), mergeable=None,
+                          merged_by={"login": "github-actions[bot]"})
                 return 200, {"merged": True, "sha": merge}
         if parts[0] == "issues" and parts[2] == "comments":
             return paged(s.comments[int(parts[1])])
@@ -318,15 +335,21 @@ class Handler(BaseHTTPRequestHandler):
                 body = self._body()
                 s.dispatches.append((workflow, body))
                 if workflow == "deploy-swa.yml":
-                    s.deploy_dispatched()
+                    run = s.deploy_dispatched()
+                    if self.headers.get("X-GitHub-Api-Version") == "2026-03-10":
+                        return 200, {"workflow_run_id": run["id"], "html_url": run["html_url"],
+                                     "run_url": f"http://{self.headers['Host']}{prefix}actions/runs/{run['id']}"}
                 return 204, None
             if parts[3] == "runs":
                 runs = [r for r in s.runs if r["workflow"] == workflow
                         and (not query.get("head_sha") or r["head_sha"] == query["head_sha"])
                         and (not query.get("event") or r["event"] == query["event"])]
                 return 200, {"workflow_runs": runs[::-1]}
-        if parts[:2] == ["actions", "runs"] and parts[3] == "jobs":
-            return 200, {"jobs": s.jobs[int(parts[2])]}
+        if parts[:2] == ["actions", "runs"]:
+            if len(parts) == 3:
+                return 200, next(r for r in s.runs if r["id"] == int(parts[2]))
+            if parts[3] == "jobs":
+                return 200, {"jobs": s.jobs[int(parts[2])]}
         return 404, {"message": f"unhandled {method} {path}"}
 
 

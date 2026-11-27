@@ -8,22 +8,15 @@ name: deploy-swa
 on:
   push:
     branches: [main]
-    paths:
-      - "manuscript/**"
-      - "theme/**"
-      - "tools/**"
-      - "staticwebapp.config.json"
-      - "infra/check_site.py"
-      - "CHANGELOG.md"
-      - ".github/workflows/deploy-swa.yml"
-  release:
-    types: [published]
   workflow_dispatch:
     inputs:
       ref:
-        description: "Tag, branch or commit to build and deploy (empty = the branch selected above). Use a release tag to roll back."
-        required: false
-        default: ""
+        description: "Published stable release tag or full commit SHA to deploy (also the rollback path)"
+        required: true
+      latest_only:
+        description: "Deploy only if still the highest published stable edition (publisher sets this; leave off for rollback)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -33,13 +26,17 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+  published-source:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      eligible: ${{ steps.source.outputs.eligible }}
+      sha: ${{ steps.source.outputs.sha }}
+      tag: ${{ steps.source.outputs.tag }}
     env:
       HAS_TOKEN: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN != '' }}
-      # release: the release's tag; dispatch: the ref input or the selected branch; push: the commit.
-      DEPLOY_REF: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.ref || github.sha }}
+      DEPLOY_REF: ${{ inputs.ref || github.sha }}
     steps:
       - name: Skip until the Static Web App exists
         if: env.HAS_TOKEN != 'true'
@@ -52,15 +49,49 @@ jobs:
             echo "Run \`./infra/deploy.sh\` (see DEPLOY.md), then **Actions → deploy-swa → Run workflow** with ref = the release tag."
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Checkout ${{ env.DEPLOY_REF }}
+      - name: Checkout the trusted production gate (main)
         if: env.HAS_TOKEN == 'true'
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        if: env.HAS_TOKEN == 'true'
+        with:
+          python-version: "3.12"
+      - name: Require published book content using main's release policy
+        id: source
+        if: env.HAS_TOKEN == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python tools/book_release.py published-source
+
+  deploy:
+    needs: published-source
+    if: needs.published-source.outputs.eligible == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: book
+    env:
+      DEPLOY_REF: ${{ needs.published-source.outputs.sha }}
+    steps:
+      - name: Checkout main's site validator
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          path: trusted
+          persist-credentials: false
+      - name: Checkout the verified published source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ env.DEPLOY_REF }}
+          path: book
           persist-credentials: false
 
       - name: Check that this ref has the build pipeline
-        if: env.HAS_TOKEN == 'true'
         run: |
           if [ ! -f tools/build.py ]; then
             echo "::error::$DEPLOY_REF has no tools/build.py, so it can't be built by this workflow. Pick a release tag."
@@ -68,14 +99,12 @@ jobs:
           fi
 
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        if: env.HAS_TOKEN == 'true'
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: tools/requirements*.txt
+          cache-dependency-path: book/tools/requirements*.txt
 
       - name: Build the site
-        if: env.HAS_TOKEN == 'true'
         run: |
           req=tools/requirements.txt
           [ -f tools/requirements-site.txt ] && req=tools/requirements-site.txt
@@ -89,24 +118,20 @@ jobs:
           echo "dist/site: $(find dist/site -type f | wc -l) files, $(du -sh dist/site | cut -f1)"
 
       - name: Pre-upload check (Free plan limits, CSP vs. the pages)
-        if: env.HAS_TOKEN == 'true'
-        run: |
-          if [ -f infra/check_site.py ]; then python3 infra/check_site.py dist/site; else echo "no infra/check_site.py in this ref, skipped"; fi
+        run: python3 ../trusted/infra/check_site.py dist/site
 
       - name: Deploy to Azure Static Web Apps (production)
         id: swa
-        if: env.HAS_TOKEN == 'true'
         uses: Azure/static-web-apps-deploy@1a947af9992250f3bc2e68ad0754c0b0c11566c9 # v1
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
           action: upload
-          app_location: dist/site
+          app_location: book/dist/site
           output_location: ""
           skip_app_build: true
           skip_api_build: true
 
       - name: Smoke test
-        if: env.HAS_TOKEN == 'true'
         env:
           SITE: ${{ steps.swa.outputs.static_web_app_url }}
         run: |
@@ -123,6 +148,7 @@ jobs:
             agents="$agents \`/$p\` $(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$SITE/$p" || true);"
           done
           link=$(curl -sI --max-time 20 "$SITE/" | grep -i '^link:' | head -c 160 || true)
+          [ "$code" = 200 ] || { echo "::error::$SITE/ answered $code"; exit 1; }
           {
             echo "## Web edition deployed"
             echo
@@ -132,4 +158,3 @@ jobs:
             echo "- Agent files:$agents (expected 200 each)"
             echo "- Home page Link header: \`${link:-none}\`"
           } >> "$GITHUB_STEP_SUMMARY"
-          [ "$code" = 200 ] || { echo "::error::$SITE/ answered $code"; exit 1; }

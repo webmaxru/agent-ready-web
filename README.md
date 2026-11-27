@@ -1,6 +1,6 @@
 # Agent-Ready Websites in Action
 
-This repository holds the manuscript of *Agent-Ready Websites in Action: How to make your website work for AI agents, layer by layer* by Maxim Salnikov (version 2.0.0, 12 chapters in three parts), together with its figure sources, editorial records, theme, build tools and hosting setup. The runnable demos, including the running example Nordlys Cabins, live in the companion repository [webmaxru/agent-ready-web-demos](https://github.com/webmaxru/agent-ready-web-demos). The web edition is hosted on Azure Static Web Apps at https://agent-ready-web.salnikov.no once deployed (see [`DEPLOY.md`](DEPLOY.md)).
+This repository holds the manuscript of *Agent-Ready Websites in Action: How to make your website work for AI agents, layer by layer* by Maxim Salnikov (version 2.0.0, 12 chapters in three parts), together with its figure sources, editorial records, theme, build tools and hosting setup. The runnable demos, including the running example Nordlys Cabins, live in the companion repository [webmaxru/agent-ready-web-demos](https://github.com/webmaxru/agent-ready-web-demos). The web edition is live on Azure Static Web Apps at https://agent-ready-web.salnikov.no (see [`DEPLOY.md`](DEPLOY.md)).
 
 The book develops the ideas of the author's earlier book, *Tools, Not Clicks: Building Agent-Ready Websites with WebMCP* ([webmcp.salnikov.no](https://webmcp.salnikov.no)), into the whole field of agent-readiness, and this repository uses the same layout and build.
 
@@ -16,7 +16,7 @@ The book develops the ideas of the author's earlier book, *Tools, Not Clicks: Bu
 | `editorial/` | Editorial logs, one per chapter: the passes each chapter went through and what was checked. |
 | [`infra/`](infra/) | Azure Static Web Apps infrastructure for the web edition, with a one-command deploy. See [`DEPLOY.md`](DEPLOY.md) and [`CUSTOM-DOMAIN.md`](CUSTOM-DOMAIN.md). |
 | [`staticwebapp.config.json`](staticwebapp.config.json) | The web edition's hosting rules and security headers; the site build copies it into `dist/site/` and adds the generated routes (Link headers, `.well-known` rewrites). |
-| [`.github/workflows/`](.github/workflows/) | Book CI (lint, all builds, EPUBCheck and the agent-readiness audit on every pull request), Release (from a merged release pull request or a `v*` tag) and the web deploy. |
+| [`.github/workflows/`](.github/workflows/) | Book CI, Book approval signal, Release approved book, the dispatch-only Release book publisher, and the released-content-gated web deploy. See [Book release flow contract v1](RELEASING.md#book-release-flow-contract-v1). |
 | [`AGENT-READY.md`](AGENT-READY.md) | How the web edition makes itself agent-ready, which checks it passes and which it skips on purpose. |
 | [`CHANGELOG.md`](CHANGELOG.md), [`RELEASING.md`](RELEASING.md) | What changed in each version, and how to cut a release. |
 | [`VALIDATION.md`](VALIDATION.md) | How the book was checked against the specifications, documentation and tools it describes, with every finding and its source. |
@@ -69,12 +69,12 @@ Any command takes `--manuscript DIR` to build another manuscript folder, for exa
 
 ## Editions and releases
 
-Every release is a Git tag `vX.Y.Z` with a GitHub Release carrying the PDF, the print PDF, the EPUB and the HTML edition (zip), all built from that tag, with the version's [`CHANGELOG.md`](CHANGELOG.md) section as its notes. Releases come only from an owner-approved content pull request: `/update-book` prepares the update, the pull request must pass **Book release preflight**, and when the owner approves it (or, on his own pull request, comments `/release-book <head sha>`), it is merged, tagged, released and deployed automatically (see [`RELEASING.md`](RELEASING.md)). The current version is in [`tools/book.json`](tools/book.json) and on the book's copyright page. The web edition shows the release history at https://agent-ready-web.salnikov.no/releases.html and as an Atom feed at `/releases.xml`.
+Every release is a Git tag `vX.Y.Z` with a GitHub Release carrying the PDF, the print PDF, the EPUB and the HTML edition (zip), all built from that tag, with the version's [`CHANGELOG.md`](CHANGELOG.md) section as its notes. Releases come only from an owner-approved content pull request: `/update-book` prepares the update, the pull request must pass **Book release preflight**, and when the owner approves it (or, on his own pull request, comments `/release-book <head sha>`), it is merged, tagged and released. Only the highest published stable edition deploys automatically (see [`RELEASING.md`](RELEASING.md)). The current version is in [`tools/book.json`](tools/book.json) and on the book's copyright page. The web edition shows the release history at https://agent-ready-web.salnikov.no/releases.html and as an Atom feed at `/releases.xml`.
 
 - **PDF**, 7 × 9.25 in, for reading and Leanpub.
 - **Print PDF**, 7.5 × 9.25 in, the paperback interior for KDP (7 × 9.25 is not a KDP trim size; the print variant keeps the text block, so the pagination stays the same).
 - **EPUB 3**, checked with EPUBCheck, for e-book stores.
-- **Web edition**, deployed to Azure Static Web Apps on every change to `main` and on every release, once the deployment token is set up ([`DEPLOY.md`](DEPLOY.md)). Until then, the release run says the web edition was not deployed.
+- **Web edition**, deployed to Azure Static Web Apps from published stable editions. Main pushes deploy only when the trusted `published-source` gate confirms the book content matches the latest published stable release. A manual dispatch accepts a released tag or SHA for rollback; prereleases and unreleased content never reach production ([`DEPLOY.md`](DEPLOY.md)).
 - [Book CI](.github/workflows/ci.yml) lints the manuscript, builds every edition, runs EPUBCheck, `check_site`, the Lighthouse agentic-browsing audit and the release checks on every pull request; its aggregate check is **Book release preflight**, and the built files are attached to the run.
 
 ## Publishing
