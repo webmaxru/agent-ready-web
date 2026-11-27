@@ -181,7 +181,7 @@ def approval(pr, reviews, comments, timeline=()):
                     and (latest.get("submitted_at") or "") > barrier)
     command = f"/release-book {head}"
     return any(
-        (c.get("user") or {}).get("login") == OWNER and (c.get("body") or "").strip() == command
+        (c.get("user") or {}).get("login") == OWNER and c.get("body") == command
         and c.get("updated_at") == c.get("created_at")
         and (c.get("created_at") or "") > barrier
         for c in comments
@@ -275,7 +275,7 @@ def event_numbers(api, event):
     if "issue" in event and "pull_request" in event["issue"]:
         comment = event.get("comment") or {}
         if ((comment.get("user") or {}).get("login") == OWNER
-                and RELEASE_COMMAND.fullmatch((comment.get("body") or "").strip())):
+                and RELEASE_COMMAND.fullmatch(comment.get("body") or "")):
             return [event["issue"]["number"]]
         return []
     if (event.get("inputs") or {}).get("pr"):

@@ -83,7 +83,7 @@ A version is released only from an **owner-approved, content-only pull request**
 3. **Book CI** runs on the pull request. Its aggregate check **Book release preflight** must be green. It covers the lint, the four editions, EPUBCheck, `check_site`, the Lighthouse agentic-browsing audit and the release checks below.
 4. **The owner approves.**
    - A pull request by someone else needs an **Approve** review from `webmaxru` on its current head commit.
-   - On his own pull request (GitHub forbids approving your own), he comments exactly `/release-book <the full 40-character head SHA>`.
+   - On his own pull request (GitHub forbids approving your own), the entire comment must be `/release-book <the full 40-character head SHA>`, with no leading or trailing whitespace, not even a final newline.
    - A new push needs a new approval. Editing or deleting an authorization comment revokes it; post a fresh comment rather than editing one.
    - A later "changes requested" review, or a dismissed review, blocks the release until he approves again. A `/release-book` comment then counts only if it comes after that barrier.
 5. **Release approved book** (`.github/workflows/approved-book.yml`) does the rest. It starts on the review, on the comment, when Book CI finishes, on a 30-minute scan that catches missed events, or by hand with the pull request number. It:

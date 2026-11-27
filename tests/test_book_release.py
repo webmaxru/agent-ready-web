@@ -80,12 +80,20 @@ class Approval(unittest.TestCase):
         pr = pr_dict(HEAD)
         at = "2026-12-01T10:00:00Z"
         self.assertTrue(br.approval(pr, [], [comment(f"/release-book {HEAD}", at)]))
-        self.assertTrue(br.approval(pr, [], [comment(f"  /release-book {HEAD}\n", at)]))
         self.assertFalse(br.approval(pr, [], [comment(f"/release-book {OLD}", at)]))
         self.assertFalse(br.approval(pr, [], [comment(f"/release-book {HEAD[:12]}", at)]))
         self.assertFalse(br.approval(pr, [], [comment(f"/release-book {HEAD} please", at)]))
         self.assertFalse(br.approval(pr, [], [comment(f"/release-book {HEAD}", at, "someone")]))
         self.assertFalse(br.approval(pr, [], []))
+
+    def test_surrounding_whitespace_neither_signals_nor_authorizes_release(self):
+        command = f"/release-book {HEAD}"
+        for body in (" " + command, command + " ", command + "\n", command + "\r\n"):
+            with self.subTest(body=body):
+                signal = comment(body, "2026-12-01T10:00:00Z")
+                self.assertEqual(br.event_numbers(None, {"issue": {"number": PR, "pull_request": {}},
+                                                         "comment": signal}), [])
+                self.assertFalse(br.approval(pr_dict(HEAD), [], [signal]))
 
     def test_owner_comment_must_follow_any_barrier(self):
         pr = pr_dict(HEAD)
