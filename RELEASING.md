@@ -58,6 +58,53 @@ These may differ between books and are documented in each repository: the format
 
 The contract suite is unchanged across the four books. `tests/test_book_release.py` covers approval, merge, provenance, no-write recovery and production-source decisions with a loopback GitHub API and a strict `gh` shim; its CLI rehearsal also uses a temporary Git repository. `tests/test_validate_release.py` covers version/evidence rules, and `tests/test_workflows.py` checks trusted-main execution and workflow references. Run everything with `python -m unittest discover -s tests -v`.
 
+## Actions artifact storage
+
+The workflow YAML in this repository is authoritative: there is no shared workflow
+template or generator to regenerate. The shared release-flow contract tests remain
+unchanged. Ordinary push and PR checks still build every edition and run every gate,
+but do not upload PDF/EPUB/ZIP bundles. Small Lighthouse JSON diagnostics expire after
+one day, including reports produced before a failed audit.
+
+For a downloadable preview, choose **Actions > Book CI > Run workflow**, select the
+source branch/tag and enable `upload_preview` (boolean, default `false`), or run:
+
+```sh
+gh workflow run ci.yml --ref YOUR_BRANCH -f upload_preview=true
+```
+
+The preview expires after **one day**. Its versioned `book-preview-v1` name binds
+SHA-256 hashes of the repository/book identity and full source ref (branch and tag
+names remain distinct), plus producing run ID and attempt. A separate `workflow_run`
+cleanup executes only trusted `main` tooling with narrowly scoped Actions write
+permission; it never checks out or executes the preview source. It identifies the
+replacement's actual upload artifact ID from that producing run, verifies the successful
+upload step and run metadata, and deletes only older matching previews, including
+superseded attempts in the same or older completed runs. Cleanup is
+serialized per source name without cancelling a running cleanup, rechecks producers
+before deletion, and preserves newer uploads, the replacement, active/rerunning producers,
+other refs/workflows, diagnostics and release staging. Overlapping active previews
+can temporarily coexist until the next successful preview cleanup or one-day expiry.
+Failed uploads never remove the previous preview. Missing or contradictory identity,
+API errors and cleanup failures are visible failures, not successful cleanup.
+
+Release builds still upload `editions-TAG` and `release-notes-TAG` for the publish
+job to download, with **seven-day** retention for failure recovery. Neither ordinary
+CI nor these staging artifacts feed website deployment: it rebuilds verified published
+source independently. Only after publication and the downstream deployment job finish
+successfully does a trusted cleanup job re-run the existing provenance/expected-assets
+validator, download the actual published assets, and run the publisher's format and
+SHA256SUMS integrity validator. It then deletes only the two exact staging upload IDs
+from that run. Any failure, incomplete publication, failed deployment, missing identity
+or uncertain verification retains staging for expiry/recovery. Existing no-write
+publication retries and approval gates are unchanged. Cleanup never deletes releases,
+release assets, tags or deployed content.
+
+Retention changes do **not** shorten artifacts already uploaded under an older policy;
+those retain their original expiration. No legacy artifacts are bulk-purged. Other
+repositories still consume the account's shared 500 MB included Actions artifact-storage
+allowance, so this change alone cannot guarantee immediate storage/billing relief.
+
 ## Version numbers
 
 Versions follow Semantic Versioning, read for a book:

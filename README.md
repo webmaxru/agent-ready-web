@@ -75,7 +75,7 @@ Every release is a Git tag `vX.Y.Z` with a GitHub Release carrying the PDF, the 
 - **Print PDF**, 7.5 × 9.25 in, the paperback interior for KDP (7 × 9.25 is not a KDP trim size; the print variant keeps the text block, so the pagination stays the same).
 - **EPUB 3**, checked with EPUBCheck, for e-book stores.
 - **Web edition**, deployed to Azure Static Web Apps from published stable editions. Main pushes deploy only when the trusted `published-source` gate confirms the book content matches the latest published stable release. A manual dispatch accepts a released tag or SHA for rollback; prereleases and unreleased content never reach production ([`DEPLOY.md`](DEPLOY.md)).
-- [Book CI](.github/workflows/ci.yml) lints the manuscript, builds every edition, runs EPUBCheck, `check_site`, the Lighthouse agentic-browsing audit and the release checks on every pull request; its aggregate check is **Book release preflight**, and the built files are attached to the run.
+- [Book CI](.github/workflows/ci.yml) lints the manuscript, builds every edition, runs EPUBCheck, `check_site`, the Lighthouse agentic-browsing audit and the release checks on every pull request; its aggregate check is **Book release preflight**. Full-book downloads require an explicit [one-day manual preview](RELEASING.md#actions-artifact-storage); ordinary CI keeps only small audit reports.
 
 ## Publishing
 
