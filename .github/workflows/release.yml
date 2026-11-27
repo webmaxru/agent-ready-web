@@ -100,6 +100,9 @@ jobs:
     timeout-minutes: 45
     permissions:
       contents: read
+    outputs:
+      editions: ${{ steps.editions.outputs.artifact-id }}
+      notes: ${{ steps.notes.outputs.artifact-id }}
     defaults:
       run:
         shell: bash
@@ -164,12 +167,14 @@ jobs:
           (cd release && sha256sum -- * > SHA256SUMS.txt && cat SHA256SUMS.txt)
           ls -l release
       - uses: actions/upload-artifact@v7
+        id: editions
         with:
           name: editions-${{ env.TAG }}
           path: release/
           if-no-files-found: error
           retention-days: 7
       - uses: actions/upload-artifact@v7
+        id: notes
         with:
           name: release-notes-${{ env.TAG }}
           path: release-notes.md
@@ -245,3 +250,32 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: python tools/book_release.py deploy --tag "${{ needs.plan.outputs.tag }}"
+
+  cleanup:
+    name: Remove verified publication staging
+    needs: [plan, build, publish, deploy]
+    if: always() && github.ref == 'refs/heads/main' && needs.build.result == 'success' && needs.publish.result == 'success' && needs.publish.outputs.published == 'true' && needs.deploy.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+      actions: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Verify published bytes before removing this run's staging
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.plan.outputs.tag }}
+          SHA: ${{ needs.plan.outputs.merge_sha }}
+          EDITIONS: ${{ needs.build.outputs.editions }}
+          NOTES: ${{ needs.build.outputs.notes }}
+        run: |
+          python tools/artifact_storage.py release --run-id "$GITHUB_RUN_ID" \
+            --tag "$TAG" --sha "$SHA" --editions "$EDITIONS" --notes "$NOTES"

@@ -3,7 +3,7 @@
 # broken cross-references, files without exactly one H1, empty book.json fields). The EPUB must
 # pass EPUBCheck, the site must pass infra/check_site.py (CSP, Static Web Apps limits), and the
 # home page and a chapter page are audited with Lighthouse's Agentic browsing category. The built
-# editions are attached to the run, so a pull request can be read as a PDF before it is merged.
+# editions are uploaded only for explicitly requested manual previews.
 # While manuscript/ is empty, everything runs on the build fixture (tools/fixtures/manuscript).
 # On a pull request, release-checks also runs the release-tooling unit tests and
 # tools/validate_release.py change (version, CHANGELOG, tag and evidence gate; see RELEASING.md).
@@ -16,6 +16,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      upload_preview:
+        description: "Upload a one-day book preview for this source ref"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -130,15 +135,29 @@ jobs:
             python3 tools/agentic_report.py "$name.json" --min-tools 3 | tee -a "$GITHUB_STEP_SUMMARY"
           done
           kill %1 || true
-      - uses: actions/upload-artifact@v7
+      - name: Upload small audit diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
         with:
-          name: book-${{ github.sha }}
+          name: audit-${{ github.run_id }}-${{ github.run_attempt }}
+          path: lh-*.json
+          retention-days: 1
+      - name: Identify requested preview
+        if: github.event_name == 'workflow_dispatch' && inputs.upload_preview
+        id: preview-name
+        run: python tools/artifact_storage.py preview-name
+      - name: Upload requested book preview
+        if: github.event_name == 'workflow_dispatch' && inputs.upload_preview
+        id: preview
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.preview-name.outputs.name }}
           path: |
             dist/*.pdf
             dist/*.epub
             dist/*.zip
-            lh-*.json
-          retention-days: 3
+          if-no-files-found: error
+          retention-days: 1
 
   book-release-preflight:
     name: Book release preflight
