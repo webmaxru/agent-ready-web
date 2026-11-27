@@ -44,6 +44,10 @@ class GateError(PolicyError):
     pass
 
 
+class StaleBaseError(GateError):
+    """An approved, green PR whose branch must be updated from main before it can merge."""
+
+
 class APIError(RuntimeError):
     pass
 
@@ -257,14 +261,16 @@ def candidate(api, number, *, expected_head=None, expected_base=None, checks=Fal
     if not approval(pr, api.pages(f"pulls/{number}/reviews"), api.pages(f"issues/{number}/comments"),
                     api.pages(f"issues/{number}/timeline")):
         raise GateError("no current owner approval of this exact head")
-    if not pr.get("merged"):
-        main = full_sha(api.request("GET", "git/ref/heads/main")["object"]["sha"])
-        if not is_ancestor(api, main, head):
-            raise GateError("the head is behind main; update the branch and approve again")
-        if base != main:
-            raise GateError("main moved during preflight; update the branch and approve again")
     if checks:
         checks_passed(api, pr, head)
+    if not pr.get("merged"):
+        main = full_sha(api.request("GET", "git/ref/heads/main")["object"]["sha"])
+        if base != main:
+            raise StaleBaseError(f"approved, but its base {base[:12]} is behind main {main[:12]}. "
+                                 "The controller only merges an approved head built on current main: "
+                                 "update the branch from main, then approve the new head.")
+        if not is_ancestor(api, main, head):
+            raise GateError("the head is behind main; update the branch and approve again")
     tag = "v" + version_at(api, head)
     fresh = api.request("GET", f"pulls/{number}")
     if fresh["head"]["sha"] != head or fresh["base"]["sha"] != pr["base"]["sha"]:
@@ -307,6 +313,10 @@ def inspect(api, event):
             pr, head, base, tag = candidate(api, number, checks=True)
             if pr.get("merged"):
                 continue
+        except StaleBaseError as error:
+            print(f"::warning::PR #{number}: {error}", flush=True)
+            summary(f"PR #{number} is {error}")
+            continue
         except (GateError, PolicyError) as error:
             print(f"PR #{number} not eligible: {error}", file=sys.stderr)
             continue
