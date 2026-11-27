@@ -5,9 +5,9 @@
   release-plan  check the provenance of a merge (or an existing tag) before anything is written
   publish       annotated tag at the merge, draft release, upload every edition, publish
   deploy        dispatch deploy-swa.yml for the tag and report whether the web edition went live
+  published-source  read-only production gate: only published stable book content may deploy
 
-The repository is private on the free plan, so branch protection is unavailable: this
-controller is the only gate. A manual merge bypasses it (see RELEASING.md).
+A manual merge bypasses this controller (see the catch-up scenario in RELEASING.md).
 """
 from __future__ import annotations
 
@@ -28,6 +28,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import release_policy as policy  # noqa: E402
+import validate_release as validator  # noqa: E402
 from release_policy import OWNER, PolicyError  # noqa: E402
 
 CHECK_WORKFLOW = "ci.yml"
@@ -167,18 +168,21 @@ def approval(pr, reviews, comments, timeline=()):
         key=lambda r: (r.get("submitted_at") or "", r["id"]),
     )
     latest = formal[-1] if formal else None
-    author = (pr.get("user") or {}).get("login")
-    if author != OWNER:
-        return bool(latest and latest["state"] == "APPROVED" and latest.get("commit_id") == head)
-    barrier = (latest.get("submitted_at") or "") if latest and latest["state"] != "APPROVED" else ""
+    barrier = max((r.get("submitted_at") or "" for r in formal
+                   if r["state"] != "APPROVED"), default="")
     owner_reviews = {r["id"] for r in formal}
     for event in timeline:
         if (event.get("event") == "review_dismissed"
                 and (event.get("dismissed_review") or {}).get("review_id") in owner_reviews):
             barrier = max(barrier, event.get("created_at") or "")
+    author = (pr.get("user") or {}).get("login")
+    if author != OWNER:
+        return bool(latest and latest["state"] == "APPROVED" and latest.get("commit_id") == head
+                    and (latest.get("submitted_at") or "") > barrier)
     command = f"/release-book {head}"
     return any(
         (c.get("user") or {}).get("login") == OWNER and (c.get("body") or "").strip() == command
+        and c.get("updated_at") == c.get("created_at")
         and (c.get("created_at") or "") > barrier
         for c in comments
     )
@@ -235,6 +239,8 @@ def candidate(api, number, *, expected_head=None, expected_base=None, checks=Fal
         raise GateError("the pull request head changed after preflight")
     base = full_sha(pr["base"]["sha"])
     if pr.get("merged"):
+        if (pr.get("merged_by") or {}).get("login") != "github-actions[bot]":
+            raise GateError("a manual merge bypasses the controller; open a catch-up content PR")
         commit = api.request("GET", f"git/commits/{full_sha(pr['merge_commit_sha'])}")
         base = full_sha(commit["parents"][0]["sha"])
     elif pr.get("mergeable") is not True:
@@ -246,8 +252,11 @@ def candidate(api, number, *, expected_head=None, expected_base=None, checks=Fal
                     api.pages(f"issues/{number}/timeline")):
         raise GateError("no current owner approval of this exact head")
     if not pr.get("merged"):
-        if not is_ancestor(api, base, head):
+        main = full_sha(api.request("GET", "git/ref/heads/main")["object"]["sha"])
+        if not is_ancestor(api, main, head):
             raise GateError("the head is behind main; update the branch and approve again")
+        if base != main:
+            raise GateError("main moved during preflight; update the branch and approve again")
     if checks:
         checks_passed(api, pr, head)
     tag = "v" + version_at(api, head)
@@ -333,15 +342,17 @@ def release_plan(api, *, number=None, head=None, base=None, merge_sha=None, tag=
     if tag:
         policy.tag_version(tag)
     if not number:
-        if not tag:
+        if not tag and not merge_sha:
             raise GateError("give the approved PR (pr, merge_sha) or an existing release tag")
-        ref = api.request("GET", f"git/ref/tags/{tag}", missing=True)
-        if not ref:
+        ref = api.request("GET", f"git/ref/tags/{tag}", missing=True) if tag else None
+        if not ref and not merge_sha:
             raise GateError(f"{tag} does not exist; recover with the PR number instead")
-        tagged = peel(api, ref)
-        if merge_sha and full_sha(merge_sha) != tagged:
-            raise GateError(f"{tag} points at another commit")
-        merge_sha = tagged
+        if ref:
+            tagged = peel(api, ref)
+            if merge_sha and full_sha(merge_sha) != tagged:
+                raise GateError(f"{tag} points at another commit")
+            merge_sha = tagged
+        merge_sha = full_sha(merge_sha)
         matches = [p for p in api.pages(f"commits/{merge_sha}/pulls")
                    if p.get("merged_at") and p.get("merge_commit_sha") == merge_sha]
         if len(matches) != 1:
@@ -379,16 +390,21 @@ def release_plan(api, *, number=None, head=None, base=None, merge_sha=None, tag=
         raise GateError(f"{tag} already points at another commit; tags are never moved")
     release = find_release(api, tag)
     recovery = "false"
-    if release and not release["draft"]:
+    if ref or release:
+        if not ref or not release or release["draft"]:
+            raise GateError(f"{tag} is a partial release (tag-only, missing tag or draft); "
+                            "left unchanged: release a new version")
         missing = policy.missing_assets(tag, api.pages(f"releases/{release['id']}/assets"))
         if missing:
             raise GateError(f"{tag} is published but incomplete (missing {', '.join(missing)}); "
                             "published files are never overwritten: release a new patch version")
         recovery = "true"
         summary(f"{tag} is already published with every edition; nothing to do.")
-    output({"merge_sha": merge_sha, "head": actual_head, "base": actual_base, "pr": str(number),
-            "tag": tag, "version": version, "prerelease": str(policy.is_prerelease(version)).lower(),
-            "previous": previous or "", "recovery": recovery})
+    values = {"merge_sha": merge_sha, "head": actual_head, "base": actual_base, "pr": str(number),
+              "tag": tag, "version": version, "prerelease": str(policy.is_prerelease(version)).lower(),
+              "previous": previous or "", "recovery": recovery}
+    output(values)
+    return values
 
 
 # ---------------------------------------------------------------- publish
@@ -420,32 +436,22 @@ def check_files(tag, folder):
 def publish(api, tag, sha, folder, notes):
     version = policy.tag_version(tag)
     full_sha(sha)
+    plan = release_plan(api, tag=tag, merge_sha=sha)
+    if plan["recovery"] == "true":
+        summary(f"{tag} was already published with every edition; left unchanged.")
+        return
     files = check_files(tag, folder)
     if not os.path.isfile(notes) or not os.path.getsize(notes):
         raise GateError("missing release notes")
-    ref = api.request("GET", f"git/ref/tags/{tag}", missing=True)
-    if ref:
-        if peel(api, ref) != sha:
-            raise GateError(f"{tag} points at another commit; tags are never moved")
-    else:
-        obj = api.request("POST", "git/tags", {"tag": tag, "message": tag, "object": sha, "type": "commit"})
-        api.request("POST", "git/refs", {"ref": f"refs/tags/{tag}", "sha": obj["sha"]})
-        print(f"Created the annotated tag {tag} at {sha}.")
-    release = find_release(api, tag)
-    if release and not release["draft"]:
-        missing = policy.missing_assets(tag, api.pages(f"releases/{release['id']}/assets"))
-        if missing:
-            raise GateError(f"{tag} is published but incomplete; published files are never overwritten")
-        summary(f"{tag} was already published with every edition; left unchanged.")
-        return
     published = [r["tag_name"] for r in api.pages("releases") if not r["draft"] and not r["prerelease"]]
     latest = policy.is_newest_stable(version, published)
     pre = ["--prerelease"] if policy.is_prerelease(version) else []
-    if not release:
-        gh("release", "create", tag, "--verify-tag", "--draft", "--latest=false",
-           "--title", tag, "--notes-file", notes, *pre)
-    # Still a draft here, so replacing a half-uploaded file overwrites nothing published.
-    gh("release", "upload", tag, *files, "--clobber")
+    obj = api.request("POST", "git/tags", {"tag": tag, "message": tag, "object": sha, "type": "commit"})
+    api.request("POST", "git/refs", {"ref": f"refs/tags/{tag}", "sha": obj["sha"]})
+    print(f"Created the annotated tag {tag} at {sha}.")
+    gh("release", "create", tag, "--verify-tag", "--draft", "--latest=false",
+       "--title", tag, "--notes-file", notes, *pre)
+    gh("release", "upload", tag, *files)
     release = find_release(api, tag)
     if not release or not release["draft"]:
         raise GateError(f"the draft release for {tag} disappeared or was published by someone else")
@@ -458,6 +464,57 @@ def publish(api, tag, sha, folder, notes):
 
 
 # ---------------------------------------------------------------- deploy
+
+def published_source(api, event, root):
+    """Resolve production to an immutable SHA; compare content with main's trusted policy."""
+    kind = event.get("event_name")
+    releases = [r for r in api.pages("releases") if not r["draft"] and not r["prerelease"]
+                and policy.TAG_RE.fullmatch(r["tag_name"])
+                and not policy.is_prerelease(r["tag_name"][1:])]
+    if kind == "push":
+        if event.get("ref") != "refs/heads/main":
+            raise GateError("production push must target main")
+        tag = policy.latest_stable([r["tag_name"] for r in releases])
+        if not tag:
+            summary("No published stable edition; production deploy skipped.")
+            output({"eligible": "false"})
+            return
+        target = full_sha(event.get("after"))
+    elif kind in {"workflow_dispatch", "release"}:
+        ref = ((event.get("inputs") or {}).get("ref") if kind == "workflow_dispatch"
+               else (event.get("release") or {}).get("tag_name"))
+        if kind == "release" and (event["release"].get("prerelease") or event["release"].get("draft")):
+            summary("Pre-release or draft; production deploy skipped.")
+            output({"eligible": "false"})
+            return
+        if isinstance(ref, str) and policy.TAG_RE.fullmatch(ref):
+            tag = ref
+        elif isinstance(ref, str) and policy.SHA_RE.fullmatch(ref):
+            matches = [r["tag_name"] for r in releases
+                       if peel(api, api.request("GET", f"git/ref/tags/{r['tag_name']}")) == ref]
+            tag = policy.latest_stable(matches)
+        else:
+            raise GateError("give a published stable release tag or full SHA, never a branch")
+        if not tag or tag not in {r["tag_name"] for r in releases}:
+            raise GateError(f"{ref} is not a published stable release")
+        target = None
+    else:
+        raise GateError("unsupported production deploy event")
+    released = peel(api, api.request("GET", f"git/ref/tags/{tag}"))
+    if target:
+        changed = validator.changes(root, released, target)
+        content = [path for path, _ in changed if policy.is_content(path) or path == policy.CHANGELOG]
+        if policy.BOOK_JSON in {path for path, _ in changed}:
+            keys = policy.changed_keys(validator.show(root, released, policy.BOOK_JSON),
+                                       validator.show(root, target, policy.BOOK_JSON))
+            if set(keys) & policy.METADATA_KEYS:
+                content.append(policy.BOOK_JSON)
+        if content:
+            summary(f"Unreleased book content differs from {tag}; production deploy skipped.")
+            output({"eligible": "false"})
+            return
+    output({"eligible": "true", "sha": target or released, "tag": tag})
+
 
 def _when(value):
     return datetime.datetime.fromisoformat(value.replace("Z", "+00:00"))
@@ -516,7 +573,8 @@ def deploy(api, tag, *, timeout=1500, interval=15):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("operation", choices=["inspect", "merge", "release-plan", "publish", "deploy"])
+    parser.add_argument("operation", choices=["inspect", "merge", "release-plan", "publish", "deploy",
+                                              "published-source"])
     parser.add_argument("--event")
     parser.add_argument("--pr", type=int)
     parser.add_argument("--head")
@@ -525,6 +583,7 @@ def main(argv=None):
     parser.add_argument("--tag")
     parser.add_argument("--assets")
     parser.add_argument("--notes")
+    parser.add_argument("--root", type=Path, default=Path("."))
     parser.add_argument("--timeout", type=int, default=1500)
     parser.add_argument("--interval", type=int, default=15)
     args = parser.parse_args(argv)
@@ -533,9 +592,14 @@ def main(argv=None):
             stream.reconfigure(encoding="utf-8", errors="replace")
     try:
         api = GitHub()
-        if args.operation == "inspect":
+        if args.operation in {"inspect", "published-source"}:
             with open(args.event or os.environ["GITHUB_EVENT_PATH"], encoding="utf-8") as handle:
-                inspect(api, json.load(handle))
+                event = json.load(handle)
+            if args.operation == "inspect":
+                inspect(api, event)
+            else:
+                event["event_name"] = os.environ["GITHUB_EVENT_NAME"]
+                published_source(api, event, args.root)
         elif args.operation == "merge":
             merge(api, args.pr, full_sha(args.head), full_sha(args.base))
         elif args.operation == "release-plan":

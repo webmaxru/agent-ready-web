@@ -16,6 +16,7 @@ sys.path.insert(0, str(HERE))
 import book_release as br  # noqa: E402
 import release_policy as policy  # noqa: E402
 from github_fake import OWNER, FakeGitHub  # noqa: E402
+from test_validate_release import Repo, git  # noqa: E402
 
 PR = 7
 CHANGELOG = "# Changelog\n\n## [Unreleased]\n\n## [2.0.0] - 2026-11-05\n\n- Second edition.\n"
@@ -52,7 +53,7 @@ def review(i, state, commit, at, user=OWNER):
 
 
 def comment(body, at, user=OWNER):
-    return {"user": {"login": user}, "body": body, "created_at": at}
+    return {"user": {"login": user}, "body": body, "created_at": at, "updated_at": at}
 
 
 HEAD = "a" * 40
@@ -96,6 +97,19 @@ class Approval(unittest.TestCase):
                      "dismissed_review": {"review_id": 2}}]
         self.assertFalse(br.approval(pr, [dismissed], [comment(f"/release-book {HEAD}", "2026-12-01T11:00:00Z")], timeline))
         self.assertTrue(br.approval(pr, [dismissed], [comment(f"/release-book {HEAD}", "2026-12-01T12:00:00Z")], timeline))
+
+    def test_edited_comment_and_deleted_comment_are_not_authorization(self):
+        approved = comment(f"/release-book {HEAD}", "2026-12-01T10:00:00Z")
+        approved["updated_at"] = "2026-12-01T10:01:00Z"
+        self.assertFalse(br.approval(pr_dict(HEAD), [], [approved]))
+        self.assertFalse(br.approval(pr_dict(HEAD), [], []))
+
+    def test_late_dismissal_of_an_older_review_revokes_a_newer_approval(self):
+        reviews = [review(1, "DISMISSED", OLD, "2026-12-01T09:00:00Z"),
+                   review(2, "APPROVED", HEAD, "2026-12-01T10:00:00Z")]
+        timeline = [{"event": "review_dismissed", "created_at": "2026-12-01T11:00:00Z",
+                     "dismissed_review": {"review_id": 1}}]
+        self.assertFalse(br.approval(pr_dict(HEAD, "contributor"), reviews, [], timeline))
 
 
 class Controller(unittest.TestCase):
@@ -169,11 +183,21 @@ class Controller(unittest.TestCase):
 
     def test_pr_conditions(self):
         cases = [({"draft": True}, "non-draft"), ({"same_repo": False}, "from this repository"),
-                 ({"mergeable": None}, "not mergeable")]
+                 ({"mergeable": None}, "not mergeable"), ({"mergeable": False}, "not mergeable")]
         for pull, message in cases:
             with self.subTest(pull=pull):
                 self.open_pr(**pull)
                 self.assertIn(message, self.inspect()[1])
+
+    def test_closed_pr_and_wrong_base_are_refused_without_writes(self):
+        self.open_pr()
+        for key, value in (("state", "closed"), ("base", {**self.s.pulls[PR]["base"], "ref": "develop"})):
+            with self.subTest(key=key):
+                original = self.s.pulls[PR][key]
+                self.s.pulls[PR][key] = value
+                self.assertIn("only open", self.inspect()[1])
+                self.s.pulls[PR][key] = original
+        self.assertEqual(self.s.writes, [])
 
     def test_head_behind_main_is_refused(self):
         main2 = self.s.commit({**BASE_FILES, "figures/new.svg": "<svg/>"}, [self.base])
@@ -183,9 +207,30 @@ class Controller(unittest.TestCase):
         self.s.comment(PR, f"/release-book {self.head}")
         self.s.ci_run(self.head)
         self.assertIn("behind main", self.inspect()[1])
+        self.assertGate("behind main", br.merge, self.api, PR, self.head, main2)
+        self.assertEqual(self.s.writes, [])
+
+    def test_stale_pull_base_cannot_hide_current_main(self):
+        self.open_pr()
+        self.s.refs["heads/main"] = {"type": "commit", "sha": self.s.commit(BASE_FILES, [self.base])}
+        self.assertIn("behind main", self.inspect()[1])
+        self.assertEqual(self.s.writes, [])
+
+    def test_owner_comment_is_revoked_by_a_new_head_edit_or_deletion(self):
+        self.open_pr()
+        approved = self.s.comments[PR][0]
+        approved["updated_at"] = "2099-01-01T00:00:00Z"
+        self.assertIn("no current owner approval", self.inspect()[1])
+        approved["updated_at"] = approved["created_at"]
+        self.s.pulls[PR]["head"]["sha"] = self.s.commit(update_files(), [self.head])
+        self.assertIn("no current owner approval", self.inspect()[1])
+        self.s.comments[PR].clear()
+        self.assertIn("no current owner approval", self.inspect()[1])
+        self.assertEqual(self.s.writes, [])
 
     def test_preflight_must_pass_on_the_exact_head(self):
         self.open_pr(ci=False)
+        self.s.ci_run(self.base)
         self.assertIn("Book CI has not passed", self.inspect()[1])
         self.s.ci_run(self.head, job_conclusion="failure")
         self.assertIn("'Book release preflight' has not passed", self.inspect()[1])
@@ -235,6 +280,8 @@ class Controller(unittest.TestCase):
         merge_sha = self.s.resolve("main")
         self.assertEqual(values, {"merge_sha": merge_sha, "tag": "v2.1.0"})
         self.assertEqual(self.s.commits[merge_sha]["parents"], [self.base])
+        self.assertEqual(self.s.merge_requests[0]["sha"], self.head)
+        self.assertEqual(self.s.merge_requests[0]["merge_method"], "squash")
         self.assertEqual(self.s.dispatches, [("release.yml", {"ref": "main", "inputs": {
             "pr": str(PR), "head_sha": self.head, "base_sha": self.base, "merge_sha": merge_sha, "tag": "v2.1.0"}})])
 
@@ -243,7 +290,7 @@ class Controller(unittest.TestCase):
         self.assertGate("head changed", br.merge, self.api, PR, "c" * 40, self.base)
         self.assertGate("base changed", br.merge, self.api, PR, self.head, "c" * 40)
         self.s.refs["heads/main"] = {"type": "commit", "sha": self.s.commit(BASE_FILES, [self.base])}
-        self.assertGate("main moved", br.merge, self.api, PR, self.head, self.base)
+        self.assertGate("behind main", br.merge, self.api, PR, self.head, self.base)
         self.assertFalse(self.s.pulls[PR]["merged"])
         self.assertEqual(self.s.dispatches, [])
 
@@ -298,9 +345,17 @@ class Controller(unittest.TestCase):
 
     def test_release_plan_from_a_tag(self):
         merge_sha = self.merged()
-        self.s.tag("v2.1.0", merge_sha)
+        self.publish("v2.1.0", merge_sha)
         self.assertEqual(self.plan(tag="v2.1.0")["pr"], str(PR))
         self.assertGate("does not exist", self.plan, tag="v9.9.9")
+
+    def test_manual_merge_is_not_release_provenance(self):
+        merge_sha = self.merged()
+        self.s.pulls[PR]["merged_by"] = {"login": OWNER}
+        writes = list(self.s.writes)
+        self.assertGate("manual merge", self.plan, number=PR)
+        self.assertGate("manual merge", self.publish, "v2.1.0", merge_sha)
+        self.assertEqual(self.s.writes, writes)
 
     # ------------------------------------------------------------ publish
 
@@ -334,6 +389,7 @@ class Controller(unittest.TestCase):
         self.assertEqual([c[:2] for c in self.s.gh_calls], [["release", "create"], ["release", "upload"], ["release", "edit"]])
         self.assertIn("--draft", self.s.gh_calls[0])
         self.assertIn("--verify-tag", self.s.gh_calls[0])
+        self.assertNotIn("--clobber", self.s.gh_calls[1])
         release = self.release("v2.1.0")
         self.assertFalse(release["draft"])
         self.assertTrue(release["latest"])
@@ -343,24 +399,49 @@ class Controller(unittest.TestCase):
     def test_published_complete_release_is_a_no_op(self):
         merge_sha = self.merged()
         self.publish("v2.1.0", merge_sha)
-        calls = len(self.s.gh_calls)
+        writes = list(self.s.writes)
         self.assertIn("left unchanged", self.publish("v2.1.0", merge_sha))
-        self.assertEqual(len(self.s.gh_calls), calls)
         self.assertEqual(self.plan(number=PR)["recovery"], "true")
+        self.assertEqual(self.s.writes, writes)
 
     def test_published_incomplete_release_fails_without_writes(self):
         merge_sha = self.merged()
         self.publish("v2.1.0", merge_sha)
         self.release("v2.1.0")["assets"].pop(0)
-        calls = len(self.s.gh_calls)
+        writes = list(self.s.writes)
         self.assertGate("incomplete", self.plan, number=PR)
         self.assertGate("incomplete", self.publish, "v2.1.0", merge_sha)
-        self.assertEqual(len(self.s.gh_calls), calls)
+        self.assertEqual(self.s.writes, writes)
+
+    def test_partial_release_states_fail_without_any_write(self):
+        merge_sha = self.merged()
+        self.publish("v2.1.0", merge_sha)
+        release = self.release("v2.1.0")
+        tagged = self.s.refs["tags/v2.1.0"]
+        for state in ("draft", "tag-only", "missing-tag"):
+            with self.subTest(state=state):
+                release["draft"] = state == "draft"
+                self.s.releases = [] if state == "tag-only" else [release]
+                if state == "missing-tag":
+                    del self.s.refs["tags/v2.1.0"]
+                else:
+                    self.s.refs["tags/v2.1.0"] = tagged
+                writes = list(self.s.writes)
+                self.assertGate("partial release", self.plan, number=PR)
+                self.assertGate("partial release", self.publish, "v2.1.0", merge_sha)
+                self.assertEqual(self.s.writes, writes)
+
+    def test_publish_rechecks_provenance_before_creating_a_tag(self):
+        merge_sha = self.merged()
+        self.s.commits[merge_sha]["tree"] = "f" * 40
+        writes = list(self.s.writes)
+        self.assertGate("not a squash", self.publish, "v2.1.0", merge_sha)
+        self.assertEqual(self.s.writes, writes)
 
     def test_publish_never_moves_a_tag(self):
         merge_sha = self.merged()
         self.s.tag("v2.1.0", self.base)
-        self.assertGate("never moved", self.publish, "v2.1.0", merge_sha)
+        self.assertGate("points at another commit", self.publish, "v2.1.0", merge_sha)
         self.assertEqual(self.s.gh_calls, [])
 
     def test_publish_checks_the_files(self):
@@ -426,8 +507,28 @@ class Controller(unittest.TestCase):
                               text=True, encoding="utf-8", timeout=120)
 
     def test_cli_end_to_end(self):
-        self.open_pr()
-        tmp = Path(tempfile.mkdtemp())
+        repo = Repo()
+        self.addCleanup(repo.close)
+        self.base = repo.base
+        repo.chapter()
+        repo.release()
+        self.head = repo.commit()
+        for sha in (self.base, self.head):
+            files = {name: git(repo.root, "show", f"{sha}:{name}") for name in
+                     git(repo.root, "ls-tree", "-r", "--name-only", sha).splitlines()}
+            self.s.commits[sha] = {"files": files, "tree": git(repo.root, "rev-parse", f"{sha}^{{tree}}"),
+                                  "parents": [] if sha == self.base else [self.base]}
+        self.s.refs["heads/main"] = {"type": "commit", "sha": self.base}
+        self.s.tag("v1.0.0", self.base)
+        self.s.tag("v2.0.0", self.base)
+        self.s.pull(PR, self.head, self.base)
+        self.s.comment(PR, f"/release-book {self.head}")
+        self.s.ci_run(self.head)
+        checked = subprocess.run([sys.executable, str(Path(br.validator.__file__)), "change", "--root",
+                                  str(repo.root), "--base-ref", self.base, "--head", self.head],
+                                 capture_output=True, text=True, timeout=120)
+        self.assertEqual(checked.returncode, 0, checked.stderr)
+        tmp = Path(repo.tmp.name)
         event = tmp / "event.json"
         event.write_text(json.dumps({"inputs": {"pr": str(PR)}}), encoding="utf-8")
         inspected = self.cli("inspect", "--event", str(event))
@@ -438,6 +539,8 @@ class Controller(unittest.TestCase):
         merged = self.cli("merge", "--pr", str(PR), "--head", self.head, "--base", self.base)
         self.assertEqual(merged.returncode, 0, merged.stderr)
         inputs = self.s.dispatches[-1][1]["inputs"]
+        self.assertEqual(self.s.dispatches[-1][0], "release.yml")
+        self.assertEqual(set(inputs), {"pr", "head_sha", "base_sha", "merge_sha", "tag"})
         plan = self.cli("release-plan", "--pr", inputs["pr"], "--head", inputs["head_sha"], "--base",
                         inputs["base_sha"], "--merge-sha", inputs["merge_sha"], "--tag", inputs["tag"])
         self.assertIn("recovery=false", plan.stdout, plan.stderr)
@@ -448,11 +551,129 @@ class Controller(unittest.TestCase):
         self.assertFalse(self.release("v2.1.0")["draft"])
         again = self.cli("release-plan", "--tag", "v2.1.0")
         self.assertIn("recovery=true", again.stdout, again.stderr)
+        event.write_text(json.dumps({"inputs": {"ref": "v2.1.0"}}), encoding="utf-8")
+        with mock.patch.dict(os.environ, {"GITHUB_EVENT_NAME": "workflow_dispatch"}):
+            source = self.cli("published-source", "--event", str(event))
+        self.assertEqual(source.returncode, 0, source.stderr)
+        self.assertIn(f"sha={inputs['merge_sha']}", source.stdout)
         deployed = self.cli("deploy", "--tag", "v2.1.0", "--interval", "0", "--timeout", "5")
         self.assertEqual(deployed.returncode, 0, deployed.stderr)
         self.assertIn("NOT deployed", deployed.stdout)
-        event.unlink()
-        tmp.rmdir()
+        self.assertEqual(self.s.dispatches[-1], ("deploy-swa.yml", {"ref": "main", "inputs": {"ref": "v2.1.0"}}))
+
+
+class PublishedSource(unittest.TestCase):
+    run_op = Controller.run_op
+    assertGate = Controller.assertGate
+
+    def setUp(self):
+        self.repo = Repo()
+        self.addCleanup(self.repo.close)
+        self.fake = FakeGitHub().__enter__()
+        self.addCleanup(self.fake.__exit__, None, None, None)
+        env = mock.patch.dict(os.environ, self.fake.env())
+        env.start()
+        self.addCleanup(env.stop)
+        for name in ("GITHUB_OUTPUT", "GITHUB_STEP_SUMMARY", "GITHUB_ACTIONS"):
+            os.environ.pop(name, None)
+        self.s = self.fake.state
+        self.api = br.GitHub()
+        self.published("v2.0.0", self.repo.base)
+
+    def published(self, tag, sha, **kwargs):
+        self.s.tag(tag, sha)
+        self.s.releases.append({"id": len(self.s.releases) + 1, "tag_name": tag, "draft": False,
+                                "prerelease": False, **kwargs})
+
+    def gate(self, event):
+        result = self.run_op(br.published_source, self.api, event, self.repo.root)[1]
+        self.assertEqual(self.s.writes, [])
+        return result
+
+    def push(self):
+        return self.gate({"event_name": "push", "ref": "refs/heads/main", "after": self.repo.commit()})
+
+    def test_main_push_compares_all_trusted_content_paths_including_metadata(self):
+        for path in (*policy.CONTENT_FILES, *(p + "extra.md" for p in policy.CONTENT_PREFIXES),
+                     policy.CHANGELOG, policy.BOOK_JSON):
+            with self.subTest(path=path):
+                if path == policy.BOOK_JSON:
+                    self.repo.book(version="2.1.0")
+                else:
+                    self.repo.write({path: "unreleased\n"})
+                self.assertEqual(self.push(), {"eligible": "false"})
+                git(self.repo.root, "restore", "--source", self.repo.base, "--staged", "--worktree", ".")
+
+    def test_tooling_only_push_preserves_published_content(self):
+        self.repo.write({"tools/build.py": "print('new build')\n", "theme/site.css": "body {}"})
+        self.repo.book(agent_ready={"feed": False})
+        result = self.push()
+        self.assertEqual(result, {"eligible": "true", "sha": git(self.repo.root, "rev-parse", "HEAD"),
+                                  "tag": "v2.0.0"})
+
+    def test_gate_uses_policy_extensions_not_a_duplicate_path_list(self):
+        self.repo.write({"new-content/extra.md": "unreleased\n"})
+        with mock.patch.object(policy, "CONTENT_PREFIXES", (*policy.CONTENT_PREFIXES, "new-content/")):
+            self.assertEqual(self.push(), {"eligible": "false"})
+
+    def test_deleted_or_renamed_content_is_not_published(self):
+        self.repo.write({"manuscript/01-the-agent-ready-web.md": None, "tools/renamed.md": "old text\n"})
+        self.assertEqual(self.push(), {"eligible": "false"})
+
+    def test_highest_published_stable_is_used_not_drafts_or_prereleases(self):
+        self.repo.chapter()
+        self.repo.release("2.1.0")
+        newer = self.repo.commit()
+        self.published("v2.1.0", newer)
+        self.published("v9.0.0", self.repo.base, draft=True)
+        self.published("v10.0.0-rc.1", self.repo.base, prerelease=True)
+        self.assertEqual(self.push()["tag"], "v2.1.0")
+        self.repo.write({"VALIDATION.md": "not released\n"})
+        self.assertEqual(self.push(), {"eligible": "false"})
+
+    def test_no_release_skips_main_push(self):
+        self.s.releases.clear()
+        self.assertEqual(self.push(), {"eligible": "false"})
+
+    def test_release_event_and_manual_rollback_use_their_own_published_tag_or_sha(self):
+        self.repo.chapter()
+        self.repo.release("2.1.0")
+        self.published("v2.1.0", self.repo.commit())
+        for event in ({"event_name": "release", "release": {"tag_name": "v2.0.0"}},
+                      {"event_name": "workflow_dispatch", "inputs": {"ref": "v2.0.0"}},
+                      {"event_name": "workflow_dispatch", "inputs": {"ref": self.repo.base}}):
+            with self.subTest(event=event):
+                self.assertEqual(self.gate(event), {"eligible": "true", "sha": self.repo.base, "tag": "v2.0.0"})
+
+    def test_unreleased_tags_shas_branches_drafts_and_prereleases_are_refused(self):
+        self.repo.chapter()
+        sha = self.repo.commit()
+        self.s.tag("v2.1.0", sha)
+        self.published("v3.0.0", sha, draft=True)
+        self.published("v4.0.0-rc.1", sha, prerelease=True)
+        for ref in ("v2.1.0", sha, "main", "", "--help", "v3.0.0", "v4.0.0-rc.1"):
+            with self.subTest(ref=ref):
+                self.assertGate("published stable", self.gate,
+                                {"event_name": "workflow_dispatch", "inputs": {"ref": ref}})
+        self.assertEqual(self.s.writes, [])
+
+    def test_prerelease_event_skips_and_other_push_branches_fail(self):
+        self.assertEqual(self.gate({"event_name": "release", "release": {
+            "tag_name": "v2.1.0-rc.1", "prerelease": True}}), {"eligible": "false"})
+        self.assertGate("main", self.gate, {"event_name": "push", "ref": "refs/heads/other"})
+
+    def test_push_cli_runs_the_gate_on_a_real_git_checkout(self):
+        self.repo.write({"tools/build.py": "print('tooling update')\n"})
+        sha = self.repo.commit()
+        event = self.repo.root / "event.json"
+        event.write_text(json.dumps({"ref": "refs/heads/main", "after": sha}), encoding="utf-8")
+        env = {**os.environ, "GITHUB_EVENT_NAME": "push"}
+        result = subprocess.run([sys.executable, str(Path(br.__file__)), "published-source", "--event",
+                                 str(event), "--root", str(self.repo.root)], env=env, capture_output=True,
+                                text=True, timeout=120)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn(f"sha={sha}", result.stdout)
+        self.assertEqual(self.s.writes, [])
 
 
 if __name__ == "__main__":

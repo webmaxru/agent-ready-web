@@ -45,8 +45,7 @@ class Workflows(unittest.TestCase):
                              if name == "release.yml" else r"timeout-minutes: 12")
 
     def test_tags_come_from_the_checkout_not_an_unauthenticated_fetch(self):
-        # persist-credentials: false leaves no token for a later "git fetch" in this private
-        # repository; fetch-depth: 0 already fetches every tag.
+        # fetch-depth: 0 already fetches every tag; do not rely on persisted credentials.
         for path in WORKFLOWS.glob("*.yml"):
             text = path.read_text(encoding="utf-8")
             if "persist-credentials: false" in text:
@@ -94,7 +93,44 @@ class Workflows(unittest.TestCase):
         self.assertIn("grep -q '^warning:' build.log", build)
         self.assertIn("epubcheck", build)
         self.assertIn("check_site.py", build)
+        self.assertIn("python ../trusted/tools/lint_manuscript.py", build)
+        self.assertIn("python ../trusted/infra/check_site.py", build)
         self.assertLess(text.index("  build:"), text.index("book_release.py publish"))
+        self.assertNotIn("needs.plan.outputs.recovery == 'true'", text[text.index("  deploy:"):])
+
+    def test_controller_and_publisher_jobs_are_guarded_to_main(self):
+        for name in ("approved-book.yml", "release.yml"):
+            jobs = re.split(r"(?m)^  [a-z][a-z-]*:\n", read(name).split("\njobs:\n", 1)[1])[1:]
+            for job in jobs:
+                header = job.split("    steps:\n", 1)[0]
+                self.assertIn("github.ref == 'refs/heads/main'", header, (name, header))
+
+    def test_deploy_gate_uses_main_policy_without_yaml_content_paths(self):
+        text = read("deploy-swa.yml")
+        gate = text[text.index("  published-source:"):text.index("  deploy:")]
+        deploy = text[text.index("  deploy:"):]
+        self.assertNotIn("paths:", text)
+        self.assertIn("ref: main", gate)
+        self.assertIn("fetch-depth: 0", gate)
+        self.assertIn("python tools/book_release.py published-source", gate)
+        self.assertIn("needs: published-source", deploy)
+        self.assertIn("if: needs.published-source.outputs.eligible == 'true'", deploy)
+        self.assertIn("DEPLOY_REF: ${{ needs.published-source.outputs.sha }}", deploy)
+        self.assertIn("ref: main", deploy)
+        self.assertIn("python3 ../trusted/infra/check_site.py dist/site", deploy)
+        self.assertIn("name: Smoke test", deploy)
+        self.assertIn("if: env.HAS_TOKEN != 'true'", gate)
+        self.assertIn("if: env.HAS_TOKEN == 'true'", gate)
+        self.assertNotIn("Azure/static-web-apps-deploy", gate)
+
+    def test_workflow_run_titles_resolve_to_existing_names(self):
+        titles = {re.search(r"(?m)^name:\s*(.+)$", p.read_text(encoding="utf-8")).group(1).strip("\"'")
+                  for p in WORKFLOWS.glob("*.yml")}
+        for path in WORKFLOWS.glob("*.yml"):
+            body = path.read_text(encoding="utf-8")
+            for match in re.findall(r"(?m)^\s+workflows:\s*\[([^\]]+)\]", body):
+                for title in match.split(","):
+                    self.assertIn(title.strip().strip("\"'"), titles, path.name)
 
     def test_deploy_step_names_match_the_controller(self):
         text = read("deploy-swa.yml")

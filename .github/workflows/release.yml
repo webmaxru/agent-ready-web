@@ -16,12 +16,12 @@
 #   publish  annotated tag at the merge (never moved), draft release, upload, verify, publish.
 #            Only the highest stable version is marked Latest. Published files are never
 #            replaced: a fix is a new patch version.
-#   deploy   dispatch deploy-swa.yml with ref = the tag and report whether the web edition went
+#   deploy   after a new publication, dispatch deploy-swa.yml with ref = the tag and report whether the web edition went
 #            live (it is skipped while AZURE_STATIC_WEB_APPS_API_TOKEN is missing; see DEPLOY.md)
 #
 # Merging a release/ branch, the "release" label and pushing a tag no longer publish anything.
 # Uses only the built-in GITHUB_TOKEN.
-name: Release
+name: Release book
 
 on:
   workflow_dispatch:
@@ -56,6 +56,7 @@ concurrency:
 jobs:
   plan:
     name: Check provenance (read-only)
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -94,7 +95,7 @@ jobs:
   build:
     name: Build the editions (exact merge commit, before tagging)
     needs: plan
-    if: needs.plan.outputs.recovery != 'true'
+    if: github.ref == 'refs/heads/main' && needs.plan.outputs.recovery != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     permissions:
@@ -135,7 +136,7 @@ jobs:
           timeout 300 python -m playwright install chromium
       - name: Manuscript lint
         working-directory: book
-        run: python tools/lint_manuscript.py
+        run: python ../trusted/tools/lint_manuscript.py --manuscript manuscript
       - name: Build the web edition (zip), the EPUB, the PDF and the print PDF
         timeout-minutes: 25
         working-directory: book
@@ -144,7 +145,7 @@ jobs:
         run: |
           python tools/build.py all 2>&1 | tee build.log
           if grep -q '^warning:' build.log; then echo "::error::the build printed warnings"; exit 1; fi
-          python infra/check_site.py dist/site
+          python ../trusted/infra/check_site.py dist/site
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -162,13 +163,13 @@ jobs:
           cp book/dist/*.pdf book/dist/*.epub book/dist/*.zip release/
           (cd release && sha256sum -- * > SHA256SUMS.txt && cat SHA256SUMS.txt)
           ls -l release
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: editions-${{ env.TAG }}
           path: release/
           if-no-files-found: error
           retention-days: 7
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: release-notes-${{ env.TAG }}
           path: release-notes.md
@@ -178,7 +179,7 @@ jobs:
   publish:
     name: Tag and publish the GitHub Release
     needs: [plan, build]
-    if: needs.plan.outputs.recovery != 'true' && needs.build.result == 'success'
+    if: github.ref == 'refs/heads/main' && needs.plan.outputs.recovery != 'true' && needs.build.result == 'success'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -197,11 +198,11 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: editions-${{ env.TAG }}
           path: release
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: release-notes-${{ env.TAG }}
       - name: Re-check provenance (nothing changed since the plan)
@@ -223,7 +224,7 @@ jobs:
   deploy:
     name: Deploy the web edition
     needs: [plan, publish]
-    if: always() && needs.plan.result == 'success' && (needs.publish.result == 'success' || needs.plan.outputs.recovery == 'true')
+    if: always() && github.ref == 'refs/heads/main' && needs.plan.result == 'success' && needs.publish.result == 'success'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:

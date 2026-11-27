@@ -65,14 +65,14 @@ A book version (`tools/book.json` `version`, tag `vX.Y.Z`) versions **reader-fac
      ```text
      /release-book <full 40-character head SHA>
      ```
-   - A new push invalidates the approval.
+   - A new push or editing/deleting the authorization comment invalidates the approval.
    - A later "changes requested" review, or a dismissal, blocks the release until he approves again.
 4. **Release approved book** takes over:
    - It re-checks the approval, the scope, the head and the CI result.
    - It runs `main`'s validator and lint against the head.
-   - It squash-merges only if the head is still that SHA, then dispatches **Release**.
+   - It squash-merges only if the head is still that SHA, then dispatches **Release book**.
    
-   **Release** then:
+   **Release book** then:
    - checks that the merge is that pull request's squash on `main`;
    - builds every edition from the merge commit;
    - only then creates the annotated tag `vX.Y.Z`;
@@ -80,17 +80,18 @@ A book version (`tools/book.json` `version`, tag `vX.Y.Z`) versions **reader-fac
    - dispatches **deploy-swa** for the tag.
 5. Confirm the result:
    ```sh
-   gh release view vX.Y.Z --repo webmaxru/agent-ready-web --json tagName,isLatest,isPrerelease,assets,url
+   gh release view vX.Y.Z --repo webmaxru/agent-ready-web --json tagName,isDraft,isPrerelease,assets,url
+   gh api repos/webmaxru/agent-ready-web/releases/latest --jq .tag_name
    ```
-   Then check the deploy job's run summary. Until the owner runs `infra/deploy.sh` (see `DEPLOY.md`), it says the web edition was **not deployed**.
+   Then check the deploy job's run summary. The web edition is live; missing-token or failed-deploy runs still report **not deployed**, never a false success.
 6. Upload the PDF, EPUB and print PDF to Leanpub and KDP (`README.md#publishing`).
 
 ## Reruns and fixes
 
 - **Before the merge:** re-run **Release approved book** with the pull request number. A scheduled scan also retries recent approvals.
-- **After the merge:** re-run **Release** with the pull request number, or with the existing tag. It is idempotent:
+- **After the merge:** re-run **Release book** on `main` with the pull request number, or with the existing tag. It is idempotent:
   - A published release with every file is a successful no-op.
-  - Missing files fail with no writes.
+  - Tag-only states, drafts, missing tags and missing files fail with no writes. Use a new version, never repair assets in place.
   - So does a merge or tag that doesn't match an approved pull request.
 - **Never clobber or move a tag.** A wrong file or text in a published version is fixed by a new patch version (`vX.Y.(Z+1)`) through a new pull request.
-- Never weaken a check, change secrets or settings, or merge by hand to push a release through. On this plan, a manual merge bypasses the controller.
+- Never weaken a check, change secrets or settings, or merge by hand to push a release through. A manual merge bypasses the controller; the production gate keeps its unreleased content offline.
