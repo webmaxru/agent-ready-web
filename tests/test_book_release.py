@@ -44,6 +44,22 @@ def update_files(version="2.1.0", **extra):
     return files
 
 
+TOOLING_FILES = {**BASE_FILES, ".github/workflows/ci.yml": "ci\n", "README.md": "readme\n",
+                 "RELEASING.md": "releasing\n", "tests/test_x.py": "test\n", "theme/book.css": "css\n",
+                 "tools/build.py": "changed\n"}
+TOOLING_PATHS = ".github/workflows/ci.yml, README.md, RELEASING.md, tests/test_x.py, theme/book.css"
+
+
+def tooling_only(paths):
+    return (f"PR #{PR} is tooling-only (no book content changed: {paths}); the release controller never "
+            "merges or releases tooling PRs. Merge it yourself once its checks are green.")
+
+
+def mixed(paths):
+    return (f"PR #{PR} mixes book content with tooling ({paths}); split it: merge the tooling PR yourself, "
+            "then authorize the content PR.")
+
+
 def pr_dict(head, author=OWNER):
     return {"head": {"sha": head}, "user": {"login": author}}
 
@@ -279,14 +295,97 @@ class Controller(unittest.TestCase):
         self.assertIn("'Book release preflight' has not passed", self.inspect()[1])
 
     def test_scope_is_content_only(self):
-        cases = [(update_files(**{"tools/build.py": "changed\n"}), "mixed: tools/build.py"),
-                 (update_files(**{"tools/book.json": book("2.1.0", agent_ready={"feed": False})}), "mixed: tools/book.json"),
-                 ({**BASE_FILES, "tools/build.py": "changed\n"}, "tooling"),
-                 ({**BASE_FILES, "manuscript/01-the-agent-ready-web.md": "Updated.\n"}, "must bump the version")]
+        cases = [(update_files(**{"tools/build.py": "changed\n"}), mixed("tools/build.py")),
+                 (update_files(**{"tools/book.json": book("2.1.0", agent_ready={"feed": False})}),
+                  mixed("tools/book.json")),
+                 ({**BASE_FILES, "tools/build.py": "changed\n"}, tooling_only("tools/build.py")),
+                 ({**BASE_FILES, "CHANGELOG.md": CHANGELOG + "\n"}, tooling_only("CHANGELOG.md")),
+                 (TOOLING_FILES, tooling_only(TOOLING_PATHS)),
+                 (dict(BASE_FILES), tooling_only("no files"))]
         for files, message in cases:
             with self.subTest(message=message):
                 self.open_pr(files)
-                self.assertIn(message, self.inspect()[1])
+                with self.assertRaises(br.OutOfScope) as refused:
+                    br.candidate(self.api, PR, checks=True)
+                self.assertEqual(str(refused.exception), message)
+        self.open_pr({**BASE_FILES, "manuscript/01-the-agent-ready-web.md": "Updated.\n"})
+        self.assertIn("must bump the version", self.inspect()[1])
+        self.assertEqual(self.s.writes, [])
+
+    # ------------------------------------------------------------ out-of-scope reporting
+
+    def signal(self, event):
+        """inspect() for one event: (outputs, stdout, stderr, step summary)."""
+        report = Path(self.fake.tmp.name) / "summary.md"
+        report.write_text("", encoding="utf-8")
+        err = io.StringIO()
+        with mock.patch.dict(os.environ, {"GITHUB_STEP_SUMMARY": str(report)}), contextlib.redirect_stderr(err):
+            _, values, out = self.run_op(br.inspect, self.api, event)
+        return values, out, err.getvalue(), report.read_text(encoding="utf-8")
+
+    def command(self, action="created"):
+        return {"action": action, "issue": {"number": PR, "pull_request": {}},
+                "comment": {"user": {"login": OWNER}, "body": f"/release-book {self.head}"}}
+
+    def workflow_run(self, name):
+        return {"workflow_run": {"name": name, "head_branch": "update/chapter-1",
+                                 "head_repository": {"full_name": self.api.repo}}}
+
+    def assertWarned(self, event, reason):
+        values, out, err, report = self.signal(event)
+        self.assertEqual(values, {"eligible": "false"})
+        self.assertEqual(out.count("::warning::"), 1, out)
+        self.assertIn(f"::warning::{reason}\n", out)
+        self.assertEqual(out.count(reason), 1, out)
+        self.assertEqual(report, reason + "\n")
+        self.assertNotIn("not eligible", err)
+        self.assertEqual(self.s.writes, [])
+
+    def assertQuiet(self, event, reason):
+        values, out, err, report = self.signal(event)
+        self.assertEqual(values, {"eligible": "false"})
+        self.assertNotIn("::warning::", out)
+        self.assertNotIn(reason, out)
+        self.assertEqual(report, "")
+        self.assertIn(f"PR #{PR} not eligible: {reason}\n", err)
+        self.assertEqual(self.s.writes, [])
+
+    def test_explicit_command_on_a_tooling_or_mixed_pr_warns_once(self):
+        cases = [(TOOLING_FILES, tooling_only(TOOLING_PATHS)),
+                 (update_files(**{"tools/build.py": "changed\n", "theme/book.css": "css\n"}),
+                  mixed("theme/book.css, tools/build.py"))]
+        for files, reason in cases:
+            for name, event in (("comment", self.command), ("dispatch", lambda: {"inputs": {"pr": str(PR)}})):
+                with self.subTest(reason=reason, event=name):
+                    self.open_pr(files)
+                    self.assertWarned(event(), reason)
+
+    def test_scope_is_reported_before_mergeability_approval_and_checks(self):
+        self.open_pr(TOOLING_FILES, approve=False, ci=False, mergeable=None)
+        self.assertWarned(self.command(), tooling_only(TOOLING_PATHS))
+        self.assertWarned({"inputs": {"pr": str(PR)}}, tooling_only(TOOLING_PATHS))
+
+    def test_scans_report_tooling_prs_quietly(self):
+        reason = tooling_only(TOOLING_PATHS)
+        self.open_pr(TOOLING_FILES, author="contributor")
+        for event in ({"schedule": "17,47 * * * *"}, self.workflow_run("Book CI"), self.command("deleted")):
+            with self.subTest(event=event):
+                self.assertQuiet(event, reason)
+
+    def test_owner_approval_signal_on_a_tooling_pr_warns_but_other_reviews_stay_quiet(self):
+        reason = tooling_only(TOOLING_PATHS)
+        signal = self.workflow_run("Book approval signal")
+        self.open_pr(TOOLING_FILES, author="contributor")
+        self.assertWarned(signal, reason)
+        self.open_pr(TOOLING_FILES, author="contributor", approve=False)
+        self.s.reviews[PR].clear()
+        self.s.review(PR, "COMMENTED", self.head, user="copilot-pull-request-reviewer[bot]")
+        self.assertQuiet(signal, reason)
+        self.s.review(PR, "APPROVED", self.head, user="collaborator")
+        self.assertQuiet(signal, reason)
+        mixed_reason = mixed("tools/build.py")
+        self.open_pr(update_files(**{"tools/build.py": "changed\n"}), author="contributor")
+        self.assertWarned(signal, mixed_reason)
 
     def test_ambiguous_workflow_run_signal(self):
         self.open_pr()
@@ -793,6 +892,34 @@ class Controller(unittest.TestCase):
             source = self.cli("published-source", "--event", str(event))
         self.assertEqual(source.returncode, 0, source.stderr)
         self.assertIn(f"sha={inputs['merge_sha']}", source.stdout)
+
+    def test_cli_tooling_command_is_a_green_warning_without_writes(self):
+        tmp = Path(self.fake.tmp.name)
+        event, output, report = (tmp / name for name in ("event.json", "output", "summary.md"))
+        self.open_pr(TOOLING_FILES)
+        reason = tooling_only(TOOLING_PATHS)
+        for payload in (self.command(), {"inputs": {"pr": str(PR)}}):
+            with self.subTest(payload=payload):
+                event.write_text(json.dumps(payload), encoding="utf-8")
+                output.write_text("", encoding="utf-8")
+                report.write_text("", encoding="utf-8")
+                with mock.patch.dict(os.environ, {"GITHUB_OUTPUT": str(output), "GITHUB_STEP_SUMMARY": str(report),
+                                                  "GITHUB_ACTIONS": "true"}):
+                    result = self.cli("inspect", "--event", str(event))
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout, f"::warning::{reason}\neligible=false\n")
+                self.assertEqual(result.stderr, "")
+                self.assertEqual(output.read_text(encoding="utf-8"), "eligible=false\n")
+                self.assertEqual(report.read_text(encoding="utf-8"), reason + "\n")
+        event.write_text(json.dumps({"schedule": "17,47 * * * *"}), encoding="utf-8")
+        report.write_text("", encoding="utf-8")
+        with mock.patch.dict(os.environ, {"GITHUB_STEP_SUMMARY": str(report)}):
+            scan = self.cli("inspect", "--event", str(event))
+        self.assertEqual(scan.returncode, 0, scan.stderr)
+        self.assertEqual(scan.stdout, "eligible=false\n")
+        self.assertEqual(scan.stderr, f"PR #{PR} not eligible: {reason}\n")
+        self.assertEqual(report.read_text(encoding="utf-8"), "")
+        self.assertEqual(self.s.writes, [])
 
 
 class PublishedSource(unittest.TestCase):
