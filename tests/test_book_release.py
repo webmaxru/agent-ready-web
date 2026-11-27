@@ -243,10 +243,16 @@ class Controller(unittest.TestCase):
         self.assertGate("behind main", br.merge, self.api, PR, self.head, main2)
         self.assertEqual(self.s.writes, [])
 
-    def test_stale_pull_base_cannot_hide_current_main(self):
+    def test_stale_pull_base_is_rejected_before_ancestry_and_version_checks(self):
         self.open_pr()
-        self.s.refs["heads/main"] = {"type": "commit", "sha": self.s.commit(BASE_FILES, [self.base])}
-        self.assertIn("behind main", self.inspect()[1])
+        main = self.s.commit(BASE_FILES, [self.base])
+        self.s.refs["heads/main"] = {"type": "commit", "sha": main}
+        with mock.patch.object(br, "is_ancestor", wraps=br.is_ancestor) as ancestry, \
+                mock.patch.object(br, "version_at", wraps=br.version_at) as version:
+            self.assertGate(f"approved, but its base {self.base[:12]} is behind main {main[:12]}",
+                            br.candidate, self.api, PR, checks=True)
+        ancestry.assert_not_called()
+        version.assert_not_called()
         self.assertEqual(self.s.writes, [])
 
     def test_owner_comment_is_revoked_by_a_new_head_edit_or_deletion(self):
@@ -326,6 +332,26 @@ class Controller(unittest.TestCase):
         self.assertGate("behind main", br.merge, self.api, PR, self.head, self.base)
         self.assertFalse(self.s.pulls[PR]["merged"])
         self.assertEqual(self.s.dispatches, [])
+
+    def test_main_moving_after_candidate_validation_still_blocks_the_merge(self):
+        self.open_pr()
+        main = self.s.commit(BASE_FILES, [self.base])
+        request = self.api.request
+        reads = 0
+
+        def advance_main(method, path, **kwargs):
+            nonlocal reads
+            if method == "GET" and path == "git/ref/heads/main":
+                reads += 1
+                if reads == 2:
+                    self.s.refs["heads/main"] = {"type": "commit", "sha": main}
+            return request(method, path, **kwargs)
+
+        with mock.patch.object(self.api, "request", side_effect=advance_main):
+            self.assertGate("main moved during preflight", br.merge, self.api, PR, self.head, self.base)
+        self.assertEqual(reads, 2)
+        self.assertEqual(self.s.writes, [])
+        self.assertFalse(self.s.pulls[PR]["merged"])
 
     def test_merge_api_is_sha_conditional(self):
         self.open_pr()
@@ -656,6 +682,58 @@ class Controller(unittest.TestCase):
         env = {**os.environ}
         return subprocess.run([sys.executable, str(Path(br.__file__)), *args], env=env, capture_output=True,
                               text=True, encoding="utf-8", timeout=120)
+
+    def test_cli_stale_base_warns_until_branch_update_and_fresh_authorization(self):
+        tmp = Path(self.fake.tmp.name)
+        event, output, summary = (tmp / name for name in ("event.json", "output", "summary.md"))
+        event.write_text(json.dumps({"inputs": {"pr": str(PR)}}), encoding="utf-8")
+
+        def inspect():
+            output.write_text("", encoding="utf-8")
+            summary.write_text("", encoding="utf-8")
+            with mock.patch.dict(os.environ, {"GITHUB_OUTPUT": str(output), "GITHUB_STEP_SUMMARY": str(summary)}):
+                result = self.cli("inspect", "--event", str(event))
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(self.s.writes, [])
+            return result, output.read_text(encoding="utf-8"), summary.read_text(encoding="utf-8")
+
+        for author in (OWNER, "contributor"):
+            with self.subTest(author=author):
+                self.s.refs["heads/main"] = {"type": "commit", "sha": self.base}
+                self.open_pr(author=author)
+                self.assertIn("eligible=true", inspect()[1])
+                main = self.s.commit(BASE_FILES, [self.base])
+                self.s.refs["heads/main"] = {"type": "commit", "sha": main}
+                for _ in range(2):
+                    result, values, report = inspect()
+                    self.assertEqual(values, "eligible=false\n")
+                    reason = f"approved, but its base {self.base[:12]} is behind main {main[:12]}"
+                    remedy = "update the branch from main, then approve the new head"
+                    self.assertIn(f"::warning::PR #{PR}: {reason}", result.stdout)
+                    self.assertIn(f"PR #{PR} is {reason}", report)
+                    self.assertIn(remedy, result.stdout)
+                    self.assertIn(remedy, report)
+
+                self.s.ci_run(self.head, conclusion="failure")
+                result, values, report = inspect()
+                self.assertEqual((values, report), ("eligible=false\n", ""))
+                self.assertNotIn("::warning::", result.stdout)
+                self.assertIn("Book CI has not passed", result.stderr)
+
+                self.open_pr(author=author, base=main, approve=False)
+                result, values, report = inspect()
+                self.assertEqual((values, report), ("eligible=false\n", ""))
+                self.assertNotIn("::warning::", result.stdout)
+                self.assertIn("no current owner approval", result.stderr)
+                if author == OWNER:
+                    self.s.comment(PR, f"/release-book {self.head}")
+                else:
+                    self.s.review(PR, "APPROVED", self.head)
+                result, values, report = inspect()
+                self.assertIn("eligible=true", values)
+                self.assertIn(f"head={self.head}\nbase={main}", values)
+                self.assertEqual(report, "")
+                self.assertNotIn("::warning::", result.stdout)
 
     def test_cli_end_to_end(self):
         repo = Repo()

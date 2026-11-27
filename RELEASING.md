@@ -296,13 +296,15 @@ An approval counts only for the head it was given on. A push after approval, a *
 
 ### 5. The branch is behind `main`
 
-The head must include current `main`, and GitHub must report the PR as mergeable. Update the branch and approve again:
+The head must include current `main`, and GitHub must report the PR as mergeable. Another PR can merge just after approval, leaving the approved branch behind. Once owner approval and **Book release preflight** pass on the exact head, the controller detects a base behind live `main` before running the trusted validator and lint. It skips that PR on every run, with an Actions warning and a run-summary message: `PR #N is approved, but its base ... is behind main ...`, followed by the remedy: update the branch from `main`, then approve the new head.
+
+Update the branch:
 
 ```sh
 gh pr update-branch N
 ```
 
-If GitHub reports a conflict, resolve it on the branch first.
+If GitHub reports a conflict, resolve it on the branch first. Wait for **Book release preflight** to pass on the updated head, then authorize that exact head again (scenario 1 or 2). Updating without fresh authorization stays ineligible. The controller still re-checks live `main` immediately before the SHA-conditional merge; if it moves during validation, the merge is refused rather than reusing the old approval/base.
 
 ### 6. Approved, but the PR is still open
 
