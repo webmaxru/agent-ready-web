@@ -210,7 +210,7 @@ Commands use the [GitHub CLI](https://cli.github.com/) (`gh`) from a clone of th
 | Event | What happens | Release? |
 | --- | --- | --- |
 | PR opened or pushed | **Book CI** runs the lint, the four editions, EPUBCheck, `check_site`, Lighthouse and the release checks. Its **Book release preflight** job is the gate. | No |
-| Owner **Approve** review, or an owner `/release-book <SHA>` comment | **Release approved book** re-checks everything and squash-merges the approved head. | Yes, through **Release book** |
+| Owner **Approve** review, or an owner `/release-book <SHA>` comment | **Release approved book** re-checks everything and squash-merges the approved head. On a tooling-only or mixed PR it only warns, on a green run ([scenarios 7](#7-tooling-docs-and-workflow-changes) and [8](#8-mixed-content-and-tooling)). | Yes, through **Release book**; never for tooling |
 | **Request changes** review by anyone, or any review dismissal | Revokes every earlier authorization; the owner must authorize again afterwards. | **No** |
 | Book CI or approval-signal run finishes, or the half-hourly scan | The controller looks for an approved PR it missed. It never approves anything itself. | Only if a valid approval exists |
 | **Release approved book → Run workflow** with `pr` | Same re-check for one PR. | Only if a valid approval exists |
@@ -318,11 +318,19 @@ If the run died within a second with no steps, see [Runs that fail without start
 
 ### 7. Tooling, docs and workflow changes
 
-A PR that touches only files outside the content allowlist (`tools/` other than the release keys of `book.json`, `theme/`, `.github/`, `infra/`, `README.md`, `RELEASING.md`, tests) is **tooling-only**. It must not change `version`, `edition`, `checked_as_of` or `year` in `tools/book.json`, and it must not add a CHANGELOG version section: `validate_release.py` fails it with `a tooling-only change must not change release metadata`. It never releases, and the controller never merges it. Merge it yourself when CI is green. Its main push may rebuild using the new tooling only if the trusted content comparison matches the latest published stable release. If main already carries unreleased book changes, deployment skips.
+A PR that touches only files outside the content allowlist (`tools/` other than the release keys of `book.json`, `theme/`, `.github/`, `infra/`, `README.md`, `RELEASING.md`, tests) is **tooling-only**. It must not change `version`, `edition`, `checked_as_of` or `year` in `tools/book.json`, and it must not add a CHANGELOG version section: `validate_release.py` fails it with `a tooling-only change must not change release metadata`. It never releases, and the controller never merges it. An owner **Approve** or `/release-book <SHA>` on it, or **Run workflow** with its number, gives a green **Release approved book** run with an Actions warning and the same run-summary message, not a merge:
+
+`PR #N is tooling-only (no book content changed: <up to five paths>); the release controller never merges or releases tooling PRs. Merge it yourself once its checks are green.`
+
+Merge it yourself once CI is green. Book CI wake-ups and the half-hourly scan skip it with only a log line. Its main push may rebuild using the new tooling only if the trusted content comparison matches the latest published stable release. If main already carries unreleased book changes, deployment skips.
 
 ### 8. Mixed content and tooling
 
-A PR that changes both content and tooling passes CI, but the controller never merges it (`controller never merges mixed changes automatically. Split the pull request.`). Split it into two PRs: tooling first (merged by you), then the content PR.
+A PR that changes both content and tooling passes CI, but the controller never merges it. An owner **Approve** or `/release-book <SHA>` on it, or **Run workflow** with its number, gives a green run with this warning and run-summary message, not a merge:
+
+`PR #N mixes book content with tooling (<up to five tooling paths>); split it: merge the tooling PR yourself, then authorize the content PR.`
+
+Split it into two PRs: merge the tooling PR yourself first, then authorize the content PR as usual.
 
 ### 9. Review copy (prerelease)
 

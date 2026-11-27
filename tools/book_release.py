@@ -48,6 +48,10 @@ class StaleBaseError(GateError):
     """An approved, green PR whose branch must be updated from main before it can merge."""
 
 
+class OutOfScope(GateError):
+    """A tooling-only or mixed pull request: the controller never merges or releases it."""
+
+
 class APIError(RuntimeError):
     pass
 
@@ -107,8 +111,9 @@ def output(values):
                 handle.write(f"{key}={value}\n")
 
 
-def summary(text):
-    print(text)
+def summary(text, *, echo=True):
+    if echo:
+        print(text)
     if os.environ.get("GITHUB_STEP_SUMMARY"):
         with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as handle:
             handle.write(text.rstrip() + "\n")
@@ -214,10 +219,14 @@ def scope(api, number, pr, base, head):
         keys = policy.changed_keys(file_at(api, policy.BOOK_JSON, base) or "{}",
                                    file_at(api, policy.BOOK_JSON, head) or "{}")
     result = policy.classify(paths, keys)
-    if result["kind"] != "content":
-        detail = ", ".join(result["tooling"][:5]) or "no content files"
-        raise GateError(f"not a content-only update ({result['kind']}: {detail}); merge it by hand "
-                        "after review, or split it")
+    if result["kind"] in {"tooling", "none"}:
+        listed = ", ".join(sorted(result["release"] + result["tooling"])[:5]) or "no files"
+        raise OutOfScope(f"PR #{number} is tooling-only (no book content changed: {listed}); the release "
+                         "controller never merges or releases tooling PRs. Merge it yourself once its checks "
+                         "are green.")
+    if result["kind"] == "mixed":
+        raise OutOfScope(f"PR #{number} mixes book content with tooling ({', '.join(result['tooling'][:5])}); "
+                         "split it: merge the tooling PR yourself, then authorize the content PR.")
     if not {policy.BOOK_JSON, policy.CHANGELOG} <= set(paths) or "version" not in keys:
         raise GateError("a content update must bump the version in tools/book.json and add its "
                         "CHANGELOG.md section")
@@ -253,11 +262,11 @@ def candidate(api, number, *, expected_head=None, expected_base=None, checks=Fal
             raise GateError("a manual merge bypasses the controller; open a catch-up content PR")
         commit = api.request("GET", f"git/commits/{full_sha(pr['merge_commit_sha'])}")
         base = full_sha(commit["parents"][0]["sha"])
-    elif pr.get("mergeable") is not True:
-        raise GateError("GitHub reports the pull request as not mergeable (or not computed yet)")
     if expected_base and base != full_sha(expected_base):
         raise GateError("the pull request base changed after preflight")
     scope(api, number, pr, base, head)
+    if not pr.get("merged") and pr.get("mergeable") is not True:
+        raise GateError("GitHub reports the pull request as not mergeable (or not computed yet)")
     if not approval(pr, api.pages(f"pulls/{number}/reviews"), api.pages(f"issues/{number}/comments"),
                     api.pages(f"issues/{number}/timeline")):
         raise GateError("no current owner approval of this exact head")
@@ -281,6 +290,20 @@ def candidate(api, number, *, expected_head=None, expected_base=None, checks=Fal
 # ---------------------------------------------------------------- inspect and merge
 
 RELEASE_COMMAND = re.compile(r"/release-book [0-9a-f]{40}")
+APPROVAL_SIGNAL = "Book approval signal"
+
+
+def targeted(api, event, number):
+    """Whether the owner pointed this run at the PR: a command, a dispatch, or their approval."""
+    if "issue" in event:
+        return event.get("action", "created") != "deleted"
+    if (event.get("inputs") or {}).get("pr"):
+        return True
+    if (event.get("workflow_run") or {}).get("name") != APPROVAL_SIGNAL:
+        return False
+    pr = api.request("GET", f"pulls/{number}")
+    return approval(pr, api.pages(f"pulls/{number}/reviews"), api.pages(f"issues/{number}/comments"),
+                    api.pages(f"issues/{number}/timeline"))
 
 
 def event_numbers(api, event):
@@ -318,7 +341,11 @@ def inspect(api, event):
             summary(f"PR #{number} is {error}")
             continue
         except (GateError, PolicyError) as error:
-            print(f"PR #{number} not eligible: {error}", file=sys.stderr)
+            if isinstance(error, OutOfScope) and targeted(api, event, number):
+                print(f"::warning::{error}", flush=True)
+                summary(str(error), echo=False)
+            else:
+                print(f"PR #{number} not eligible: {error}", file=sys.stderr)
             continue
         eligible.append({"pr": str(number), "head": head, "base": base, "tag": tag})
     if len(eligible) > 1 and not event.get("schedule"):
