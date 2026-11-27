@@ -66,7 +66,7 @@ A book version (`tools/book.json` `version`, tag `vX.Y.Z`) versions **reader-fac
      /release-book <full 40-character head SHA>
      ```
    - A new push or editing/deleting the authorization comment invalidates the approval.
-   - A later "changes requested" review, or a dismissal, blocks the release until he approves again.
+   - A "changes requested" review by any reviewer, or any review dismissal, blocks the release until he authorizes again after it. Only he authorizes; plain comment reviews neither authorize nor revoke.
 4. **Release approved book** takes over:
    - It re-checks the approval, the scope, the head and the CI result.
    - It runs `main`'s validator and lint against the head.

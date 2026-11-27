@@ -154,12 +154,14 @@ def find_release(api, tag):
 # ---------------------------------------------------------------- approval
 
 def approval(pr, reviews, comments, timeline=()):
-    """Whether the owner approved this exact head.
+    """Whether the owner authorized this exact head. Only the owner ever authorizes.
 
     Someone else's PR: the owner's latest formal review is APPROVED on the head SHA.
-    A later CHANGES_REQUESTED or a dismissal (state DISMISSED) revokes it.
-    The owner's own PR (GitHub forbids self-approval): the owner commented exactly
-    "/release-book <head sha>" after any changes-requested review or dismissal.
+    The owner's own PR (GitHub forbids self-approval): an unedited owner comment whose
+    whole body is exactly "/release-book <head sha>".
+    Barriers: a CHANGES_REQUESTED or DISMISSED review by any reviewer, and any
+    review_dismissed timeline event at its own time. The authorization must come strictly
+    after the latest barrier. COMMENTED reviews neither authorize nor revoke.
     """
     head = full_sha(pr["head"]["sha"])
     formal = sorted(
@@ -168,12 +170,10 @@ def approval(pr, reviews, comments, timeline=()):
         key=lambda r: (r.get("submitted_at") or "", r["id"]),
     )
     latest = formal[-1] if formal else None
-    barrier = max((r.get("submitted_at") or "" for r in formal
-                   if r["state"] != "APPROVED"), default="")
-    owner_reviews = {r["id"] for r in formal}
+    barrier = max((r.get("submitted_at") or "" for r in reviews
+                   if r.get("state") in {"CHANGES_REQUESTED", "DISMISSED"}), default="")
     for event in timeline:
-        if (event.get("event") == "review_dismissed"
-                and (event.get("dismissed_review") or {}).get("review_id") in owner_reviews):
+        if event.get("event") == "review_dismissed":
             barrier = max(barrier, event.get("created_at") or "")
     author = (pr.get("user") or {}).get("login")
     if author != OWNER:

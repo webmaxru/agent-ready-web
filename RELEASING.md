@@ -85,7 +85,7 @@ A version is released only from an **owner-approved, content-only pull request**
    - A pull request by someone else needs an **Approve** review from `webmaxru` on its current head commit.
    - On his own pull request (GitHub forbids approving your own), the entire comment must be `/release-book <the full 40-character head SHA>`, with no leading or trailing whitespace, not even a final newline.
    - A new push needs a new approval. Editing or deleting an authorization comment revokes it; post a fresh comment rather than editing one.
-   - A later "changes requested" review, or a dismissed review, blocks the release until he approves again. A `/release-book` comment then counts only if it comes after that barrier.
+   - A "changes requested" review by **any** reviewer, or any dismissed review (timed by the dismissal itself), blocks the release until the owner authorizes again strictly afterwards: a new **Approve** review or a new `/release-book` comment. Only the owner authorizes; ordinary **Comment** reviews neither authorize nor revoke.
 5. **Release approved book** (`.github/workflows/approved-book.yml`) does the rest. It starts on the review, on the comment, when Book CI finishes, on a 30-minute scan that catches missed events, or by hand with the pull request number. It:
    - checks that the pull request is from this repository, targets `main`, is not a draft, is mergeable, is not behind `main` and is content-only, and that Book release preflight passed on that exact head;
    - runs `main`'s validator and lint against the head (a pull request cannot change the rules it is checked by);
@@ -162,6 +162,7 @@ Commands use the [GitHub CLI](https://cli.github.com/) (`gh`) from a clone of th
 | --- | --- | --- |
 | PR opened or pushed | **Book CI** runs the lint, the four editions, EPUBCheck, `check_site`, Lighthouse and the release checks. Its **Book release preflight** job is the gate. | No |
 | Owner **Approve** review, or an owner `/release-book <SHA>` comment | **Release approved book** re-checks everything and squash-merges the approved head. | Yes, through **Release book** |
+| **Request changes** review by anyone, or any review dismissal | Revokes every earlier authorization; the owner must authorize again afterwards. | **No** |
 | Book CI or approval-signal run finishes, or the half-hourly scan | The controller looks for an approved PR it missed. It never approves anything itself. | Only if a valid approval exists |
 | **Release approved book → Run workflow** with `pr` | Same re-check for one PR. | Only if a valid approval exists |
 | Push a tag, add a label, press **Merge** | Nothing in the release flow. | **No** |
@@ -242,7 +243,7 @@ You now own the new PR, so continue with scenario 1: add the bump, CHANGELOG and
 
 ### 4. A new push after approval, requested changes or a dismissed review
 
-An approval counts only for the head it was given on. A push after approval, a **Request changes** review, a dismissed review, or editing/deleting the authorization comment voids it. Nothing merges until you approve again (a new **Approve** review, or a fresh `/release-book <SHA>` comment after any review barrier). An old SHA or edited comment is ignored.
+An approval counts only for the head it was given on. A push after approval, a **Request changes** review by anyone (not only you), any dismissed review, or editing/deleting the authorization comment voids it. A dismissal counts from when it happened, not from when the dismissed review was written. Nothing merges until you authorize again strictly after the latest such event: a new **Approve** review on someone else's PR, or a fresh `/release-book <SHA>` comment on your own. Another person's approval, or a plain **Comment** review, neither authorizes nor revokes. An old SHA or edited comment is ignored.
 
 ### 5. The branch is behind `main`
 

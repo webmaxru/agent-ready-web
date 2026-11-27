@@ -189,6 +189,31 @@ class Controller(unittest.TestCase):
         self.s.comment(PR, f"/release-book {self.head}", user="someone")
         self.assertIn("no current owner approval", self.inspect()[1])
 
+    def test_another_reviewers_barrier_blocks_until_fresh_owner_authorization(self):
+        for author in (OWNER, "contributor"):
+            with self.subTest(author=author):
+                self.open_pr(author=author, approve=False)
+                self.s.reviews[PR], self.s.comments[PR], self.s.timeline[PR] = [], [], []
+
+                def authorize(at):
+                    if author == OWNER:
+                        self.s.comment(PR, f"/release-book {self.head}", at=at)
+                    else:
+                        self.s.review(PR, "APPROVED", self.head, at=at)
+
+                authorize("2026-12-01T10:00:00Z")
+                if author == OWNER:
+                    self.s.review(PR, "CHANGES_REQUESTED", self.head, user="outsider", at="2026-12-01T11:00:00Z")
+                else:
+                    old = self.s.review(PR, "DISMISSED", self.head, user="outsider", at="2026-12-01T09:00:00Z")
+                    self.s.timeline[PR].append({"event": "review_dismissed", "created_at": "2026-12-01T11:00:00Z",
+                                                "dismissed_review": {"review_id": old["id"]}})
+                self.assertIn("no current owner approval", self.inspect()[1])
+                self.assertGate("no current owner approval", br.merge, self.api, PR, self.head, self.base)
+                self.assertEqual(self.s.writes, [])
+                authorize("2026-12-01T12:00:00Z")
+                self.assertEqual(self.inspect()[0]["eligible"], "true")
+
     def test_pr_conditions(self):
         cases = [({"draft": True}, "non-draft"), ({"same_repo": False}, "from this repository"),
                  ({"mergeable": None}, "not mergeable"), ({"mergeable": False}, "not mergeable")]
