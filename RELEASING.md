@@ -97,7 +97,7 @@ A version is released only from an **owner-approved, content-only pull request**
    - **plan:** checks that the merge commit is that pull request's squash on `main`, that its tree is the approved head, that the tag matches `tools/book.json`, and that the previous release is an ancestor;
    - **build:** builds the four editions and `SHA256SUMS.txt` from the exact merge commit, with the lint, `check_site` and EPUBCheck. This happens *before* any tag exists, so a failed build leaves nothing behind;
    - **publish:** creates the annotated tag `vX.Y.Z` at the merge commit, uploads the files to a draft release, checks them and publishes it. The notes are the version's `CHANGELOG.md` section. The release is marked **Latest** only if it is the highest stable version; `X.Y.Z-rc.N` is published as a pre-release;
-   - **deploy:** for a new highest published stable edition, dispatches `deploy-swa` once with `ref` set to its tag and `latest_only` enabled. An older edition or prerelease gets a notice and no dispatch. The publisher waits for the run ID GitHub returns, not the newest run listed in Actions. The release's delivery job fails unless that run completes successfully and both its Azure upload and smoke test pass (see [scenario 13](#13-only-the-deploy-failed)).
+   - **deploy:** for a new highest published stable edition, dispatches `deploy-swa` once with `ref` set to its tag and `latest_only` enabled. An older edition or prerelease gets a notice and no dispatch. The publisher waits for the run ID GitHub returns, not the newest run listed in Actions. The release's delivery job fails unless that run completes successfully and both its Azure upload and smoke test pass, and the completed run and its step results must both be received before the wait deadline (see [scenario 13](#13-only-the-deploy-failed)).
 7. Upload the new PDF and EPUB to Leanpub, and the print PDF to KDP (see [README.md](README.md#publishing)).
 
 Locally, before step 2 (CI runs the same checks):
@@ -318,7 +318,7 @@ To confirm an existing approved publication, use `gh workflow run release.yml -f
 
 ### 13. Only the deploy failed
 
-The GitHub Release is published and complete, but delivery failed or could not be confirmed. Do not re-run **Release book**. Inspect the deployment run: a timeout or lost dispatch response does not mean the upload failed. Do not dispatch again while the outcome is unknown. If delivery still needs repair, confirm the intended production tag and check the Azure token, then deploy that tag explicitly:
+The GitHub Release is published and complete, but delivery failed or could not be confirmed. Do not re-run **Release book**. Inspect the deployment run: a timeout or lost dispatch response does not mean the upload failed. A run whose success arrived only at or after the deadline is still reported as not confirmed. Do not dispatch again while the outcome is unknown. If delivery still needs repair, confirm the intended production tag and check the Azure token, then deploy that tag explicitly:
 
 ```sh
 gh secret list | grep AZURE_STATIC_WEB_APPS_API_TOKEN

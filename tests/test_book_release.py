@@ -578,6 +578,49 @@ class Controller(unittest.TestCase):
         self.assertNotIn("is live", result.stdout)
         self.assertEqual(len(self.s.dispatches), 1)
 
+    def timed_deploy(self, received):
+        """Run the deploy CLI against the loopback API; `received` maps "run"/"jobs" GETs to arrival times."""
+        clock, paths, request = [0.0], [], br.GitHub.request
+
+        def respond(api, method, path, *args, **kwargs):
+            result = request(api, method, path, *args, **kwargs)
+            paths.append(path)
+            kind = ("jobs" if path.endswith("/jobs?per_page=100")
+                    else "run" if path.startswith("actions/runs/") and path.count("/") == 2 else None)
+            if method == "GET" and kind in received:
+                clock[0] = max(clock[0], received[kind])
+            return result
+
+        def sleep(seconds):
+            clock[0] += seconds
+
+        out = io.StringIO()
+        with mock.patch.object(br.GitHub, "request", autospec=True, side_effect=respond), \
+                mock.patch.object(br.time, "monotonic", lambda: clock[0]), \
+                mock.patch.object(br.time, "sleep", sleep), contextlib.redirect_stdout(out):
+            code = br.main(["deploy", "--tag", "v2.1.0", "--timeout", "100", "--interval", "15"])
+        return code, out.getvalue(), paths
+
+    def test_deploy_evidence_must_arrive_before_the_deadline(self):
+        self.add_release("v2.1.0")
+        self.s.deploy_outcome = "deployed"
+        for name, received, code in [("on time", {"run": 10, "jobs": 20}, 0),
+                                     ("run at deadline", {"run": 100}, 1), ("run late", {"run": 120}, 1),
+                                     ("jobs at deadline", {"jobs": 100}, 1), ("jobs late", {"jobs": 120}, 1)]:
+            with self.subTest(name):
+                dispatches = len(self.s.dispatches)
+                result, out, paths = self.timed_deploy(received)
+                self.assertEqual(result, code, out)
+                self.assertEqual(len(self.s.dispatches), dispatches + 1)
+                self.assertFalse([p for p in paths if p.startswith(f"actions/workflows/{br.DEPLOY_WORKFLOW}/runs")])
+                if code:
+                    self.assertIn("did not finish in time", out)
+                    self.assertNotIn("is live", out)
+                    if "jobs" not in received:
+                        self.assertFalse(any(p.endswith("/jobs?per_page=100") for p in paths))
+                else:
+                    self.assertIn("v2.1.0 is live", out)
+
     def test_missing_dispatch_identity_is_not_retried_or_inferred(self):
         self.add_release("v2.1.0")
         self.s.deploy_outcome = "deployed"

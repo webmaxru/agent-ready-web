@@ -77,7 +77,7 @@ A book version (`tools/book.json` `version`, tag `vX.Y.Z`) versions **reader-fac
    - builds every edition from the merge commit;
    - only then creates the annotated tag `vX.Y.Z`;
    - uploads the files to a draft release and publishes it;
-   - dispatches **deploy-swa** only for a new highest published stable tag. Delivery requires that exact run to finish successfully with both the upload and smoke test green.
+   - dispatches **deploy-swa** only for a new highest published stable tag. Delivery requires that exact run to finish successfully with both the upload and smoke test green, with that evidence received before the wait deadline.
 5. Confirm the result:
    ```sh
    gh release view vX.Y.Z --repo webmaxru/agent-ready-web --json tagName,isDraft,isPrerelease,assets,url

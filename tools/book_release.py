@@ -545,6 +545,13 @@ def deploy(api, tag, *, timeout=1500, interval=15):
                 "inspect Actions before retrying. No second dispatch was sent.")
         return 1
     deadline = time.monotonic() + timeout
+
+    def unconfirmed():
+        summary(f"## Web edition: deploy not confirmed\n\nRun {run_id} did not finish in time. "
+                "Inspect it before retrying.")
+        return 1
+
+    run = None
     while time.monotonic() < deadline:
         run = api.request("GET", f"actions/runs/{run_id}", missing=True)
         if run and run["id"] != run_id:
@@ -552,15 +559,16 @@ def deploy(api, tag, *, timeout=1500, interval=15):
         if run and run["status"] == "completed":
             break
         time.sleep(interval)
-    else:
-        summary(f"## Web edition: deploy not confirmed\n\nRun {run_id} did not finish in time. "
-                "Inspect it before retrying.")
-        return 1
+    # Evidence counts only if it was received before the deadline.
+    if not run or run["status"] != "completed" or time.monotonic() >= deadline:
+        return unconfirmed()
     if run["conclusion"] != "success":
         summary(f"## Web edition NOT deployed\n\nThe deploy of {tag} failed: {run['html_url']}")
         print(f"::error title=Web edition not deployed::the deploy run failed: {run['html_url']}")
         return 1
     jobs = api.request("GET", f"actions/runs/{run_id}/jobs?per_page=100")["jobs"]
+    if time.monotonic() >= deadline:
+        return unconfirmed()
     passed = [{s["name"] for s in job.get("steps", []) if s.get("conclusion") == "success"}
               for job in jobs if job.get("conclusion") == "success"]
     if any({DEPLOY_STEP, SMOKE_STEP} <= steps for steps in passed):
